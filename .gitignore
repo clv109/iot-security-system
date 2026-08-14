@@ -1,0 +1,48 @@
+# Passwords and Environment Variables
+secretcredentials.env
+*.env
+
+# Biometric Data & Images
+dataset/
+encodings.pickle
+*.jpg
+*.jpeg
+*.png
+
+
+# Databases
+*.db
+surveillance.db
+alertlog.db
+instance/
+
+# Logs and Debug files
+*.log
+*.txt
+system_debug.txt
+flask_auth.log
+security_events.log
+camera_log.txt
+
+# Python Cache
+__pycache__/
+*.pyc
+venv/
+
+# Python files
+admincreatorscript.py
+
+# Cryptographic Keys
+*.pem
+cert.pem
+key.pem
+secret.key
+
+# Local Settings & Baselines (Ignore for good practice)
+settings.json
+baselines.json 
+
+# Old Backup folders
+Old_App.py_Files/
+Old-facial-recognition-files/
+templates/old_drafts_html_templates/

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Login | IoT Security</title>
+    
+    <!-- TAILWIND CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { 
+                extend: { 
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { gray: { 900: '#0f172a', 800: '#1e293b', 700: '#334155' } }
+                } 
+            }
+        }
+    </script>
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center relative overflow-hidden">
+    
+    <!-- Background Decos -->
+    <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none"></div> 
+    <div class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-600/20 rounded-full blur-[100px] pointer-events-none"></div>
+
+    <div class="w-full max-w-md bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-2xl shadow-2xl p-8 relative z-10">
+        
+        <!-- Logo / header -->
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-600 mx-auto flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 mb-4">
+                <i class="ph-bold ph-shield-check text-3xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold tracking-wide">IoT Home Security System</h1>
+        </div>
+
+        <!-- Error message block from Flask Backend -->
+        {% if error %}
+        <div class="mb-6 p-3 bg-rose-900/30 border border-rose-500/50 rounded-lg flex items-center gap-3 text-rose-400 text-sm font-medium">
+            <i class="ph-bold ph-warning-circle text-lg shrink-0"></i>
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Login Form -->
+        <form action="/login" method="POST" class="space-y-5">
+            <!-- CSRF token handshake -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <div>
+                <label for="username" class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Username</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                        <i class="ph-bold ph-user"></i>
+                    </div>
+                    
+                    <input type="text" id="username" name="username" required autocomplete="username"
+                           class="w-full bg-gray-950 border border-gray-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-gray-600" 
+                           placeholder="Enter your username">
+                </div>
+            </div>
+            
+            <div>
+                <label for="password" class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Password</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                        <i class="ph-bold ph-lock-key"></i>
+                    </div>
+                    
+                    <input type="password" id="password" name="password" required autocomplete="current-password"
+                           class="w-full bg-gray-950 border border-gray-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-gray-600" 
+                           placeholder="••••••••">
+                </div>
+            </div>
+            
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg shadow-indigo-500/30 mt-2 flex items-center justify-center gap-2 group">
+                <span>Log In</span>
+                <i class="ph-bold ph-arrow-right group-hover:translate-x-1 transition-transform"></i>
+            </button>
+        </form>
+        
+        <!-- Footer -->
+        <div class="mt-8 text-center text-xs text-gray-600">
+            <p><i class="ph-fill ph-lock mr-1"></i> Secure Session</p>
+        </div>
+    </div>
+
+</body>
+</html>

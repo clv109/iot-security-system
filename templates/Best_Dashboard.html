@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Home Security | AI Recognition System</title>
+    
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='0' y='0' width='64' height='64' rx='16' fill='%236366F1'/%3E%3Cpath d='M32 12 C32 12 14 18 14 32 C14 46 32 54 32 54 C32 54 50 46 50 32 C50 18 32 12 32 12 Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M24 32 L30 38 L40 26' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" type="image/svg+xml"> 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { 
+                extend: { 
+                    fontFamily: { 
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        gray: { 900: '#0f172a', 800: '#1e293b', 700: '#334155' } 
+                    }
+                } 
+            }
+        }
+    </script>
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Red Alert Flash Animation */
+        @keyframes flash-red {
+            0%, 100% { box-shadow: inset 0 0 0 0 transparent; border-color: transparent; }
+            50% { box-shadow: inset 0 0 50px rgba(220, 38, 38, 0.5); border-color: rgba(220, 38, 38, 1); }
+        }
+        .alarm-active {
+            animation: flash-red 1s ease-in-out infinite;
+            border: 4px solid red;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col relative transition-all duration-300 overflow-x-hidden" id="main-body">
+
+    <div id="visual-alarm-overlay" class="fixed inset-0 pointer-events-none z-[100] opacity-0 transition-opacity duration-300 bg-red-500/20 mix-blend-overlay"></div>
+
+    <nav class="sticky top-0 bg-gray-900 border-b border-gray-800 h-16 flex items-center justify-between px-6 shrink-0 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+                <i class="ph-bold ph-shield-check text-xl"></i>
+            </div>
+            <h1 class="font-bold text-lg tracking-wide">IOT HOME SECURITY SYSTEM <span class="text-gray-500 font-normal text-sm ml-1"></span></h1>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div id="system-status-badge" class="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-800 border border-gray-700 transition-colors">
+                <span id="main-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
+                <span id="main-status-text" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">OFFLINE</span>
+            </div>
+            
+            <button onclick="openStats()" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition-all border border-gray-700 shadow-lg">
+                <i class="ph-bold ph-chart-bar"></i>
+                <span class="hidden sm:inline">Detection Statistics</span>
+            </button>
+
+            <a href="/api/calculate_baselines" target="_blank" class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/20">
+                <i class="ph-bold ph-brain"></i>
+                <span class="hidden sm:inline">Statistical Baselines</span>
+            </a>
+
+            <a href="/livecam" target="_blank" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-indigo-500/20">
+                <i class="ph-bold ph-video-camera"></i>
+                <span class="hidden sm:inline">Live Feed</span>
+            </a>
+
+            <a href="/logout" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-rose-900/50 border border-gray-700 hover:border-rose-500 text-gray-300 hover:text-rose-200 text-sm font-semibold rounded-lg transition-all shadow-lg ml-2">
+                <i class="ph-bold ph-sign-out"></i>
+                <span class="hidden sm:inline">Logout</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="flex-1 p-4 md:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto items-start">
+            
+            <div class="space-y-6 flex flex-col">
+                
+                {% if current_user.role == 'Admin' %}
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl">
+                    <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <i class="ph-bold ph-faders"></i> System Controls
+                    </h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="controlSystem('start')" class="group relative flex flex-col items-center justify-center p-4 rounded-xl bg-gray-800 border border-gray-700 hover:bg-emerald-900/20 hover:border-emerald-500/50 transition-all duration-200">
+                            <i class="ph-fill ph-power text-3xl text-emerald-500 mb-2 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-sm font-semibold text-gray-300 group-hover:text-emerald-400">Arm System</span>
+                        </button>
+                        <button onclick="controlSystem('stop')" class="group relative flex flex-col items-center justify-center p-4 rounded-xl bg-gray-800 border border-gray-700 hover:bg-rose-900/20 hover:border-rose-500/50 transition-all duration-200">
+                            <i class="ph-fill ph-stop-circle text-3xl text-rose-500 mb-2 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-sm font-semibold text-gray-300 group-hover:text-rose-400">Disarm</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl">
+                    <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <i class="ph-bold ph-moon-stars"></i> Quiet Hours
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-300">Start Time</label>
+                            <select id="start-hour" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2.5 py-1.5 focus:ring-indigo-500 focus:border-indigo-500 outline-none"></select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-300">End Time</label>
+                            <select id="end-hour" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2.5 py-1.5 focus:ring-indigo-500 focus:border-indigo-500 outline-none"></select>
+                        </div>
+                        <button onclick="saveQuietHours()" class="w-full mt-2 py-2 bg-gray-800 hover:bg-indigo-600 border border-gray-700 hover:border-indigo-500 text-gray-300 hover:text-white rounded-lg text-sm font-semibold transition-all">
+                            Update Schedule
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl">
+                    <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <i class="ph-bold ph-database"></i> Data Retention
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm text-gray-300">Log Lifespan (Days)</label>
+                            <input type="number" id="log-retention-days" min="1" max="365" class="w-20 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2.5 py-1.5 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-center">
+                        </div>
+                        <button onclick="saveRetentionSettings()" class="w-full mt-2 py-2 bg-gray-800 hover:bg-rose-900/50 border border-gray-700 hover:border-rose-500 text-gray-300 hover:text-rose-200 rounded-lg text-sm font-semibold transition-all">
+                            Update Policy
+                        </button>
+                    </div>
+                </div>
+
+                {% endif %}
+            </div>
+
+            <div class="flex flex-col gap-6">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-xl flex flex-col h-[406px] overflow-hidden relative">
+                    <div class="bg-gray-800/50 p-4 border-b border-gray-800 flex justify-between items-center backdrop-blur-md">
+                        <h2 class="text-indigo-400 text-xs font-bold font-mono uppercase tracking-widest flex items-center gap-2">
+                            <i class="ph-bold ph-terminal-window text-lg"></i> Live Event LOG
+                        </h2>
+                        <div class="flex gap-2">
+                            <button onclick="clearLiveView()" class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded transition-colors" title="Clear View">
+                                <i class="ph-bold ph-eraser"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="log-container" class="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-2 bg-gray-950/50 scroll-smooth">
+                        <div class="text-gray-600 italic">Connecting to secure socket layer...</div>
+                    </div>
+                    
+                    <div class="p-2 bg-gray-800/50 border-t border-gray-800 text-[10px] text-gray-500 flex justify-between font-mono">
+                        <span id="socket-status">Socket: Disconnected</span>
+                        <span>Protocol: WSS</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="openHistory()" class="aspect-square bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl hover:bg-gray-800 border-transparent hover:border-indigo-500/50 transition-all duration-300 flex flex-col items-center justify-center gap-3 group">
+                        <i class="ph-duotone ph-clock-counter-clockwise text-4xl text-indigo-500 group-hover:scale-110 transition-transform"></i>
+                        <span class="text-sm font-bold text-gray-400 uppercase tracking-widest group-hover:text-indigo-400 transition-colors">History</span>
+                        <span class="text-[10px] text-gray-500 uppercase tracking-wide group-hover:text-indigo-300/70 transition-colors">Logs</span>
+                    </button>
+
+                    <button onclick="openGuide()" class="aspect-square bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl hover:bg-gray-800 border-transparent hover:border-emerald-500/50 transition-all duration-300 flex flex-col items-center justify-center gap-3 group">
+                        <i class="ph-duotone ph-book-open-text text-4xl text-emerald-500 group-hover:scale-110 transition-transform"></i>
+                        <span class="text-sm font-bold text-gray-400 uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Guide</span>
+                        <span class="text-[10px] text-gray-500 uppercase tracking-wide group-hover:text-emerald-300/70 transition-colors">User Manual</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="space-y-6 flex flex-col">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl flex flex-col h-[406px]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                            <i class="ph-bold ph-users-three"></i> Authorized Personnel
+                        </h2>
+                    {% if current_user.role == 'Admin' %}
+                    <button onclick="openAddUserModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all shadow-md shadow-indigo-500/20">
+                        <i class="ph-bold ph-plus"></i> Add
+                    </button>
+                    {% endif %}
+                </div>
+                
+                <div id="users-list-container" class="flex-1 overflow-y-auto space-y-2 pr-2">
+                    <div class="text-center text-gray-500 mt-10">Loading users...</div>
+                </div>
+            </div>
+
+            {% if current_user.role == 'Admin' %}
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-xl flex flex-col gap-6">
+                
+                <div>
+                    <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="ph-bold ph-mask-happy"></i> Privacy Management
+                    </h2>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-sm text-gray-300 font-semibold">Anonymize Database</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="anonymize-toggle" onchange="toggleAnonymize()" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-gray-500 leading-tight">If enabled, authorized names are scrubbed from the database for privacy.</p>
+                </div>
+
+                <hr class="border-gray-800">
+
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                            <i class="ph-bold ph-bounding-box"></i> Camera Privacy Mask
+                        </h2>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="privacy-zone-toggle" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+                    
+                    <p class="text-[10px] text-gray-500 leading-tight mb-3">Apply a permanent hardware-level Gaussian blur to a specific region of the camera feed (e.g. neighbor's window).</p>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Top-Left X</label>
+                            <input type="number" id="pz-x1" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2 py-1.5 focus:ring-indigo-500 outline-none text-center">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Top-Left Y</label>
+                            <input type="number" id="pz-y1" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2 py-1.5 focus:ring-indigo-500 outline-none text-center">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Bottom-Right X</label>
+                            <input type="number" id="pz-x2" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2 py-1.5 focus:ring-indigo-500 outline-none text-center">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Bottom-Right Y</label>
+                            <input type="number" id="pz-y2" class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-2 py-1.5 focus:ring-indigo-500 outline-none text-center">
+                        </div>
+                    </div>
+                    <button onclick="savePrivacyZone()" class="w-full py-2 bg-gray-800 hover:bg-emerald-900/50 border border-gray-700 hover:border-emerald-500 text-gray-300 hover:text-emerald-400 rounded-lg text-sm font-semibold transition-all">
+                        Apply Mask Coordinates
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+
+            </div> </div>
+    </main>
+
+    <div id="history-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[60] backdrop-blur-sm p-4 transition-all duration-300 opacity-0">
+        <div class="bg-gray-900 w-full max-w-4xl h-[80vh] rounded-xl border border-gray-700 shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                <div class="flex items-center gap-4">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="ph-bold ph-file-text text-indigo-400"></i> Event History Logs
+                    </h3>
+                    
+                    {% if current_user.role == 'Admin' %}
+                    <div class="flex bg-gray-950 rounded-lg p-1 ml-4 border border-gray-700">
+                        <button onclick="switchLogView('system')" id="btn-system-logs" class="px-3 py-1 text-xs font-bold rounded bg-indigo-600 text-white transition-colors">System</button>
+                        <button onclick="switchLogView('audit')" id="btn-audit-logs" class="px-3 py-1 text-xs font-bold rounded text-gray-400 hover:text-white transition-colors">Audit</button>
+                    </div>
+                    {% endif %}
+                </div>
+                <button onclick="closeHistory()" class="text-gray-400 hover:text-white"><i class="ph-bold ph-x text-xl"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 font-mono text-sm bg-gray-950" id="full-history-container"></div>
+            <div class="p-4 bg-gray-800 border-t border-gray-700 flex justify-between">
+                 {% if current_user.role == 'Admin' %}
+                 <button onclick="wipeServerLogs()" class="px-4 py-2 bg-red-900/50 hover:bg-red-900 border border-red-800 text-red-200 rounded-lg text-sm font-semibold transition-all">Wipe Logs</button>
+                 {% else %}
+                 <div></div> {% endif %}
+                 <button onclick="closeHistory()" class="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-semibold">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="stats-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[60] backdrop-blur-sm p-4 transition-all duration-300 opacity-0">
+        <div class="bg-gray-900 w-full max-w-5xl max-h-[90vh] rounded-xl border border-gray-700 shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800 shrink-0">
+                <div>
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="ph-bold ph-chart-bar text-indigo-400"></i> Live Occupancy Tracking
+                    </h3>
+                    <p class="text-xs text-gray-400 mt-1">Real-time tracking of distinct users per minute</p>
+                </div>
+                <button onclick="closeStats()" class="text-gray-400 hover:text-white"><i class="ph-bold ph-x text-xl"></i></button>
+            </div>
+            
+            <div class="flex-1 p-6 bg-gray-950 flex flex-col overflow-y-auto">
+                <div class="bg-[#1e293b] border border-gray-700 rounded-xl p-4 shadow-inner relative h-[400px] w-full shrink-0">
+                    <canvas id="detectionChart"></canvas>
+                </div>
+
+                <div class="flex gap-10 justify-center mt-6 shrink-0">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 w-52 text-center shadow-lg">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Auth This Minute</p>
+                        <div id="stat-auth" class="text-4xl font-bold text-emerald-500">0</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 w-52 text-center shadow-lg">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Unauth This Minute</p>
+                        <div id="stat-unauth" class="text-4xl font-bold text-rose-500">0</div>
+                    </div>
+                </div>
+
+                <div class="mt-6 text-center text-gray-500 text-xs shrink-0 space-y-4">
+                    <p>Click and drag to pan across time. Use scroll wheel to zoom in/out.</p>
+                    <div class="flex gap-3 justify-center">
+                        <button onclick="resetChartZoom()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-indigo-500 text-white rounded-lg text-sm font-semibold transition-all shadow-md">
+                            <i class="ph-bold ph-arrows-out mr-1"></i> Reset View
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-8 border-t border-gray-800 pt-6 pb-2 shrink-0">
+                    <div class="text-center">
+                        <h3 class="text-lg font-bold text-white mb-1 flex items-center justify-center gap-2">
+                            <i class="ph-bold ph-trend-up text-indigo-400"></i> Occupancy Prediction
+                        </h3>
+                        <p class="text-xs text-gray-400 mb-5">Predict expected occupancy based on historical session data. Displays expected authorized/unauthorized individual count and expected occupation time.</p>
+                        
+                        <div class="flex justify-center items-center gap-3">
+                            <input type="time" id="prediction-time" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all" value="12:00">
+                            <button onclick="predictOccupancy()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-6 rounded-lg transition-all shadow-lg shadow-indigo-500/20 text-sm flex items-center gap-2">
+                                <i class="ph-bold ph-magic-wand"></i> Predict
+                            </button>
+                        </div>
+                        
+                        <div id="prediction-result" class="mt-6 hidden flex justify-center gap-8 text-sm">
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl py-3 px-6 shadow-lg min-w-[180px] text-center">
+                                <span class="text-gray-400 block text-[10px] font-bold uppercase tracking-wider mb-1">Expected Authorized</span>
+                                <span id="pred-auth" class="text-3xl font-bold text-emerald-500">0</span>
+                                <div class="text-[11px] text-gray-500 mt-1 uppercase tracking-wider"><span id="pred-auth-dur" class="font-bold text-emerald-400">0</span> Mins Duration</div>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl py-3 px-6 shadow-lg min-w-[180px] text-center">
+                                <span class="text-gray-400 block text-[10px] font-bold uppercase tracking-wider mb-1">Expected Unauthorized</span>
+                                <span id="pred-unauth" class="text-3xl font-bold text-rose-500">0</span>
+                                <div class="text-[11px] text-gray-500 mt-1 uppercase tracking-wider"><span id="pred-unauth-dur" class="font-bold text-rose-400">0</span> Mins Duration</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="guide-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[60] backdrop-blur-sm p-4 transition-all duration-300 opacity-0">
+        <div class="bg-gray-900 w-full max-w-2xl h-[80vh] rounded-xl border border-gray-700 shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="ph-bold ph-book-open-text text-emerald-400"></i> System User Guide
+                </h3>
+                <button onclick="closeGuide()" class="text-gray-400 hover:text-white"><i class="ph-bold ph-x text-xl"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-8 font-sans text-gray-300 space-y-6 bg-gray-950/50 leading-relaxed">
+                <section>
+                    <h4 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="ph-fill ph-shield-check text-indigo-500"></i> 1. Arming & Disarming
+                    </h4>
+                    <p class="text-sm">
+                        Use the <strong>System Controls</strong> panel to manage camera activity. 
+                        <ul class="list-disc ml-6 mt-2 space-y-1 text-sm text-gray-400">
+                            <li><strong class="text-emerald-400">ARM SYSTEM:</strong> Starts the camera and detection algorithms.</li>
+                            <li><strong class="text-rose-400">DISARM:</strong> Stops the camera process immediately.</li>
+                        </ul>
+                    </p>
+                </section>
+
+                <hr class="border-gray-800">
+
+                <section>
+                    <h4 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="ph-fill ph-users-three text-indigo-500"></i> 2. Managing Users
+                    </h4>
+                    <p class="text-sm">
+                        To add a new authorized person:
+                        <ol class="list-decimal ml-6 mt-2 space-y-1 text-sm text-gray-400">
+                            <li>Click the <strong>Add</strong> button in the Authorized Personnel panel.</li>
+                            <li>Enter the person's full name (e.g., "John Doe").</li>
+                            <li>Upload at least <strong>5 clear photos</strong> of their face.</li>
+                            <li>Click "Register". The system will re-train its model automatically.</li>
+                        </ol>
+                    </p>
+                </section>
+
+                <hr class="border-gray-800">
+
+                <section>
+                    <h4 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="ph-fill ph-moon-stars text-indigo-500"></i> 3. Quiet Hours
+                    </h4>
+                    <p class="text-sm">
+                        Quiet Hours define a strict security period. Any detection during this time (even if it looks like a known person but fails strict validation) may <strong>trigger enhanced alerts</strong>.
+                        <br><br>
+                        Use the dropdowns to set the Start and End times, then click <strong>Update Schedule</strong>.
+                    </p>
+                </section>
+
+                <hr class="border-gray-800">
+
+                <section>
+                    <h4 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="ph-fill ph-sliders text-indigo-500"></i> 4. Model Training Parameters
+                    </h4>
+                    <p class="text-sm">
+                        Please ensure entirety of the face is clearly visible in all shots. The most optmized images for training a highly accurate model will include photos in different lighting conditions (avoid harsh shadows covering parts of the face), facing the camera directly with different facial expressions, horizational rotations of the face in many different angles left and right, vertical rotations of the face up and down. Submitting images that obstruct facial features will greatly hinder the performance of the facial recognition model.  
+                        <br><br>
+                        Click add on the top right to get started.
+                    </p>
+                </section>
+            </div>
+            
+            <div class="p-4 bg-gray-800 border-t border-gray-700 flex justify-end">
+                 <button onclick="closeGuide()" class="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-semibold transition-colors">Close Guide</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-user-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[70] backdrop-blur-sm p-4 transition-all duration-300 opacity-0">
+        <div class="bg-gray-900 w-full max-w-md rounded-xl border border-gray-700 shadow-2xl p-6 transform scale-95 transition-all">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="ph-bold ph-user-plus text-indigo-500"></i> Register Identity
+                </h3>
+                <button onclick="closeAddUserModal()" class="text-gray-500 hover:text-white"><i class="ph-bold ph-x text-lg"></i></button>
+            </div>
+
+            <form id="add-user-form" onsubmit="handleRegisterUser(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Full Name</label>
+                    <input type="text" id="new-user-name" name="name" required class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder-gray-500" placeholder="e.g. Jane_Doe">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Biometric Data (Photos)</label>
+                    <div class="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:bg-gray-800 transition-colors cursor-pointer relative group">
+                        <input type="file" id="new-user-files" name="images" multiple accept=".jpg, .jpeg, image/jpeg" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="updateFileCount()">
+                        <i class="ph-duotone ph-upload-simple text-3xl text-gray-500 group-hover:text-indigo-400 mb-2 transition-colors"></i>
+                        <p class="text-sm text-gray-400 group-hover:text-gray-300" id="file-upload-text">Drop JPG files here</p>
+                    </div>
+                </div>
+
+                <div id="upload-status" class="hidden p-3 rounded-lg bg-indigo-900/30 border border-indigo-500/30 text-indigo-200 text-xs flex items-center gap-2">
+                    <i class="ph-bold ph-circle-notch animate-spin"></i>
+                    <span>Training Neural Network...</span>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeAddUserModal()" class="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="submit-btn" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition-all">Register</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const mainBody = document.getElementById('main-body');
+        const visualAlarmOverlay = document.getElementById('visual-alarm-overlay');
+        const logContainer = document.getElementById('log-container');
+        const socketStatus = document.getElementById('socket-status');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content'); 
+
+        window.authData = [];
+        window.unauthData = [];
+        
+        window.currentMinuteTime = 0;
+        window.authSetThisMinute = new Set();
+        window.unauthSetThisMinute = new Set();
+
+        const socket = io();
+
+        socket.on('connect', () => {
+            socketStatus.textContent = "Socket: Connected";
+            socketStatus.className = "text-emerald-500";
+        });
+
+        socket.on('disconnect', () => {
+            socketStatus.textContent = "Socket: Disconnected";
+            socketStatus.className = "text-rose-500";
+        });
+
+        socket.on('security_event', (data) => {
+            const div = document.createElement('div');
+            const time = data.timestamp || new Date().toLocaleTimeString('en-US', { hour12: false });
+            
+            if (data.priority === 'ALERT') {
+                div.className = "text-rose-400 font-bold border-l-2 border-rose-500 pl-2 bg-rose-900/10 py-1";
+                if (data.message.includes("Sending email")) triggerVisualAlarm();
+            } else if (data.message.includes("SYSTEM STARTED")) {
+                div.className = "text-emerald-400 font-bold border-l-2 border-emerald-500 pl-2 bg-emerald-900/10 py-1";
+            } else if (data.message.includes("SYSTEM STOPPED")) {
+                div.className = "text-amber-400 font-bold border-l-2 border-amber-500 pl-2 bg-amber-900/10 py-1";
+            } else {
+                div.className = "text-gray-400 border-b border-gray-800/50 pb-1";
+            }
+            
+            div.innerHTML = `<span class="opacity-50 mr-2">[${time}]</span> ${formatLogLine(data.message)}`;
+            logContainer.appendChild(div);
+            logContainer.scrollTop = logContainer.scrollHeight;
+
+            if (data.message && data.message.includes("Detected:")) {
+                const now = new Date();
+                const currentMinute = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 0);
+                
+                if (window.currentMinuteTime !== currentMinute.getTime()) {
+                    window.currentMinuteTime = currentMinute.getTime();
+                    window.authSetThisMinute = new Set();
+                    window.unauthSetThisMinute = new Set();
+                    
+                    if (window.authData.length === 0 || window.authData[window.authData.length - 1].x.getTime() !== currentMinute.getTime()) {
+                        window.authData.push({ x: currentMinute, y: 0 });
+                        window.unauthData.push({ x: currentMinute, y: 0 });
+                    }
+                }
+
+                let detectedPart = data.message.split("Detected: ")[1];
+                if (detectedPart) {
+                    let persons = detectedPart.split(", ");
+                    
+                    persons.forEach(p => {
+                        let isAuth = p.includes("[AUTHORIZED]");
+                        let isUnauth = p.includes("[UNAUTHORIZED]");
+                        let name = p.replace("[AUTHORIZED]", "").replace("[UNAUTHORIZED]", "").trim();
+
+                        if (isAuth) window.authSetThisMinute.add(name);
+                        if (isUnauth) window.unauthSetThisMinute.add(name);
+                    });
+
+                    let lastIdx = window.authData.length - 1;
+                    window.authData[lastIdx].y = Math.max(window.authData[lastIdx].y, window.authSetThisMinute.size);
+                    window.unauthData[lastIdx].y = Math.max(window.unauthData[lastIdx].y, window.unauthSetThisMinute.size);
+
+                    document.getElementById('stat-auth').innerText = window.authData[lastIdx].y;
+                    document.getElementById('stat-unauth').innerText = window.unauthData[lastIdx].y;
+
+                    if (detectionChartInstance) {
+                        detectionChartInstance.update('none'); 
+                    }
+                }
+            }
+        });
+
+        setInterval(() => {
+            if (!detectionChartInstance || window.authData.length === 0) return;
+            
+            const now = new Date();
+            const currentMinute = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 0);
+            
+            if (window.currentMinuteTime !== currentMinute.getTime()) {
+                window.currentMinuteTime = currentMinute.getTime();
+                window.authSetThisMinute = new Set();
+                window.unauthSetThisMinute = new Set();
+                
+                window.authData.push({ x: currentMinute, y: 0 });
+                window.unauthData.push({ x: currentMinute, y: 0 });
+                
+                document.getElementById('stat-auth').innerText = "0";
+                document.getElementById('stat-unauth').innerText = "0";
+                
+                detectionChartInstance.update('none');
+            }
+        }, 10000);
+
+        function triggerVisualAlarm() {
+            visualAlarmOverlay.classList.remove('opacity-0');
+            setTimeout(() => visualAlarmOverlay.classList.add('opacity-0'), 300);
+            setTimeout(() => visualAlarmOverlay.classList.remove('opacity-0'), 600);
+            setTimeout(() => visualAlarmOverlay.classList.add('opacity-0'), 900);
+            mainBody.classList.add('alarm-active');
+            setTimeout(() => mainBody.classList.remove('alarm-active'), 3000);
+        }
+
+        function formatLogLine(line) {
+             return line
+                .replace(/\[AUTHORIZED\]/g, '<span class="text-emerald-500 font-bold text-[10px] uppercase tracking-wider border border-emerald-500/30 px-1 rounded">AUTH</span>')
+                .replace(/\[UNAUTHORIZED\]/g, '<span class="text-rose-500 font-bold text-[10px] uppercase tracking-wider border border-rose-500/30 px-1 rounded">UNAUTH</span>')
+                .replace(/Unknown/g, '<span class="text-rose-400 font-bold">Unknown</span>');
+        }
+
+        function populateHours() {
+            const startSel = document.getElementById('start-hour');
+            const endSel = document.getElementById('end-hour');
+            
+            if (!startSel || !endSel) {
+                return;
+            }
+
+            for(let i=0; i<24; i++) {
+                const txt = i.toString().padStart(2, '0') + ":00";
+                startSel.add(new Option(txt, i));
+                endSel.add(new Option(txt, i));
+            }
+        }
+        populateHours();
+
+        async function controlSystem(action) {
+            try {
+                const res = await fetch(action === 'start' ? '/start_system' : '/stop_system', { 
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                const data = await res.json();
+                updateStatus(); 
+            } catch (e) { alert("Connection Error"); }
+        }
+
+        async function updateStatus() {
+             try {
+                const res = await fetch('/system_status');
+                const data = await res.json();
+                const badge = document.getElementById('system-status-badge');
+                const dot = document.getElementById('main-dot');
+                const text = document.getElementById('main-status-text');
+                
+                if (data.status === 'running') {
+                    badge.classList.replace('border-gray-700', 'border-emerald-500/50');
+                    badge.classList.add('bg-emerald-900/20');
+                    dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                    text.textContent = "SYSTEM ARMED";
+                    text.className = "text-xs font-bold text-emerald-400 uppercase tracking-wider";
+                } else {
+                    badge.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-gray-800 border border-gray-700";
+                    dot.className = "w-2 h-2 rounded-full bg-gray-500";
+                    text.textContent = "OFFLINE";
+                    text.className = "text-xs font-semibold text-gray-400 uppercase tracking-wider";
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function fetchAuthorizedUsers() {
+            try {
+                const res = await fetch('/authorized_users');
+                const data = await res.json();
+                const container = document.getElementById('users-list-container');
+                container.innerHTML = '';
+                
+                if(data.names.length === 0) {
+                     container.innerHTML = '<div class="text-center text-gray-600 text-xs mt-4">No users found</div>';
+                     return;
+                }
+
+                data.names.forEach(name => {
+                    const div = document.createElement('div');
+                    div.className = "group flex items-center justify-between p-2 hover:bg-gray-800 rounded-lg transition-colors border border-transparent hover:border-gray-700";
+                    
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                             <div class="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-indigo-400 font-bold text-xs group-hover:bg-indigo-900/30 group-hover:border-indigo-500/30 transition-colors">
+                                ${name.charAt(0).toUpperCase()}
+                             </div>
+                             <span class="text-sm text-gray-300 font-medium group-hover:text-white">${name.replace(/_/g, " ")}</span>
+                        </div>
+                        {% if current_user.role == 'Admin' %}
+                        <button onclick="removeUser('${name}')" class="text-gray-600 hover:text-rose-500 p-1.5 opacity-0 group-hover:opacity-100 transition-all" title="Revoke Access">
+                            <i class="ph-bold ph-trash"></i>
+                        </button>
+                        {% endif %}
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) {}
+        }
+        
+        async function removeUser(name) {
+            if(!confirm(`Revoke access for ${name}?`)) return;
+            try {
+                await fetch('/remove_user', { 
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }, 
+                    body: JSON.stringify({ name: name }) 
+                });
+                fetchAuthorizedUsers();
+            } catch(e) { alert("Error removing user"); }
+        }
+
+        let detectionChartInstance = null;
+
+        function initOrUpdateChart(authData, unauthData) {
+            const ctx = document.getElementById('detectionChart').getContext('2d');
+            
+            if (detectionChartInstance) {
+                detectionChartInstance.data.datasets[0].data = authData;
+                detectionChartInstance.data.datasets[1].data = unauthData;
+                detectionChartInstance.update();
+                return;
+            }
+
+            detectionChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Authorized Users Present',
+                            data: authData,
+                            borderColor: '#10b981', 
+                            backgroundColor: 'rgba(16, 185, 129, 0.25)', 
+                            borderWidth: 3, 
+                            fill: true,
+                            tension: 0.4, 
+                            pointRadius: 3, 
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Unauthorized Users Present',
+                            data: unauthData,
+                            borderColor: '#f43f5e', 
+                            backgroundColor: 'rgba(244, 63, 94, 0.25)', 
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4, 
+                            pointRadius: 3,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'minute',
+                                displayFormats: { minute: 'h:mm a' },
+                                tooltipFormat: 'MMM D, h:mm a'
+                            },
+                            grid: { color: '#334155', borderDash: [5, 5] },
+                            ticks: { 
+                                color: '#94a3b8',
+                                maxRotation: 45, 
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: 5, 
+                            grid: { color: '#334155', borderDash: [5, 5] },
+                            ticks: { color: '#94a3b8', stepSize: 1, precision: 0 }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#f8fafc', font: { family: 'Inter', size: 12 } }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1
+                        },
+                        zoom: {
+                            pan: { enabled: true, mode: 'x' },
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'x'
+                            },
+                            limits: {
+                                y: { min: 0 } 
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function resetChartZoom() {
+            if (detectionChartInstance) {
+                detectionChartInstance.resetZoom();
+            }
+        }
+
+        async function loadDetectionStats() {
+            try {
+                const res = await fetch('/api/stats/detections');
+                const result = await res.json();
+                
+                if (result.status === 'success') {
+                    window.authData = [];
+                    window.unauthData = [];
+                    
+                    let dataMap = {};
+                    if (result.data.length > 0) {
+                        let startTime = new Date(result.data[0].time);
+                        let endTime = new Date();
+                        
+                        result.data.forEach(item => {
+                            dataMap[new Date(item.time).getTime()] = item;
+                        });
+                        
+                        let currentTime = new Date(startTime.getTime());
+                        while (currentTime <= endTime) {
+                            const t_val = currentTime.getTime();
+                            if (dataMap[t_val]) {
+                                window.authData.push({ x: new Date(t_val), y: dataMap[t_val].auth });
+                                window.unauthData.push({ x: new Date(t_val), y: dataMap[t_val].unauth });
+                            } else {
+                                window.authData.push({ x: new Date(t_val), y: 0 });
+                                window.unauthData.push({ x: new Date(t_val), y: 0 });
+                            }
+                            currentTime = new Date(currentTime.getTime() + 60000);
+                        }
+                        
+                        window.currentMinuteTime = window.authData[window.authData.length - 1].x.getTime();
+                        window.authSetThisMinute = new Set(); 
+                        window.unauthSetThisMinute = new Set(); 
+                    }
+                    
+                    document.getElementById('stat-auth').innerText = window.authData.length > 0 ? window.authData[window.authData.length - 1].y : "0";
+                    document.getElementById('stat-unauth').innerText = window.unauthData.length > 0 ? window.unauthData[window.unauthData.length - 1].y : "0";
+                    
+                    initOrUpdateChart(window.authData, window.unauthData);
+                }
+            } catch(e) { console.error("Error loading stats from database:", e); }
+        }
+
+        function toggleModal(id, show) {
+            const el = document.getElementById(id);
+            if (show) {
+                el.classList.remove('hidden', 'opacity-0');
+                el.classList.add('flex', 'opacity-100');
+            } else {
+                el.classList.add('hidden', 'opacity-0');
+                el.classList.remove('flex', 'opacity-100');
+            }
+        }
+        
+        const openAddUserModal = () => toggleModal('add-user-modal', true);
+        const closeAddUserModal = () => toggleModal('add-user-modal', false);
+        const openHistory = () => { 
+            toggleModal('history-modal', true); 
+            if (typeof switchLogView === 'function') switchLogView('system');
+            else loadFullHistory(); 
+        };
+        const closeHistory = () => toggleModal('history-modal', false);
+        const openGuide = () => toggleModal('guide-modal', true);
+        const closeGuide = () => toggleModal('guide-modal', false);
+        
+        const openStats = () => { 
+            toggleModal('stats-modal', true); 
+            loadDetectionStats(); 
+            loadPredictions(); 
+        };
+        const closeStats = () => toggleModal('stats-modal', false);
+
+        window.hourlyPredictions = null;
+
+        async function loadPredictions() {
+            try {
+                const res = await fetch('/api/stats/predictions');
+                const result = await res.json();
+                if (result.status === 'success') {
+                    window.hourlyPredictions = result.predictions;
+                }
+            } catch(e) { console.error("Error loading predictions:", e); }
+        }
+
+        function predictOccupancy() {
+            if (!window.hourlyPredictions) {
+                alert("Prediction data is still loading. Please try again in a moment.");
+                return;
+            }
+            
+            const timeInput = document.getElementById('prediction-time').value;
+            if (!timeInput) return;
+            
+            const hour = parseInt(timeInput.split(':')[0], 10);
+            
+            const prediction = window.hourlyPredictions[hour];
+            if (prediction) {
+                document.getElementById('pred-auth').innerText = prediction.auth;
+                document.getElementById('pred-unauth').innerText = prediction.unauth;
+                
+                document.getElementById('pred-auth-dur').innerText = prediction.auth_duration;
+                document.getElementById('pred-unauth-dur').innerText = prediction.unauth_duration;
+                
+                document.getElementById('prediction-result').classList.remove('hidden');
+            }
+        }
+
+        function updateFileCount() {
+            const input = document.getElementById('new-user-files');
+            const text = document.getElementById('file-upload-text');
+            text.textContent = input.files.length > 0 ? `${input.files.length} photos selected` : "Drop JPG files here";
+            text.classList.toggle('text-indigo-400', input.files.length > 0);
+        }
+
+        async function handleRegisterUser(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            const status = document.getElementById('upload-status');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            status.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/register_user', { 
+                    method: 'POST', 
+                    headers: { 'X-CSRFToken': csrfToken },
+                    body: new FormData(document.getElementById('add-user-form')) 
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    closeAddUserModal();
+                    fetchAuthorizedUsers();
+                    document.getElementById('add-user-form').reset();
+                } else {
+                    alert("Error: " + data.message);
+                }
+            } catch(e) { alert("Upload Failed"); } 
+            finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                status.classList.add('hidden');
+            }
+        }
+
+        setInterval(updateStatus, 5000);
+        updateStatus();
+        fetchAuthorizedUsers();
+        
+        fetch('/get_quiet_hours').then(r=>r.json()).then(d => {
+            if(d.status==='success') {
+                const startSel = document.getElementById('start-hour');
+                const endSel = document.getElementById('end-hour');
+                
+                if (startSel && endSel) {
+                    startSel.value = d.start;
+                    endSel.value = d.end;
+                }
+            }
+        });
+        
+        fetch('/get_retention').then(r=>r.json()).then(d => {
+            if(d.status==='success') {
+                const retInput = document.getElementById('log-retention-days');
+                if (retInput) {
+                    retInput.value = d.days;
+                }
+            }
+        });
+
+        fetch('/get_anonymize_mode').then(r=>r.json()).then(d => {
+            if(d.status==='success') {
+                const toggle = document.getElementById('anonymize-toggle');
+                if (toggle) {
+                    toggle.checked = d.enabled;
+                }
+            }
+        });
+
+        fetch('/get_privacy_zone').then(r=>r.json()).then(d => {
+            if(d.status==='success') {
+                const pzToggle = document.getElementById('privacy-zone-toggle');
+                if (pzToggle) {
+                    pzToggle.checked = d.data.enabled;
+                    document.getElementById('pz-x1').value = d.data.x1;
+                    document.getElementById('pz-y1').value = d.data.y1;
+                    document.getElementById('pz-x2').value = d.data.x2;
+                    document.getElementById('pz-y2').value = d.data.y2;
+                }
+            }
+        });
+        
+        async function saveQuietHours() {
+            try {
+                const res = await fetch('/update_quiet_hours', { 
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }, 
+                    body: JSON.stringify({ 
+                        start: document.getElementById('start-hour').value, 
+                        end: document.getElementById('end-hour').value 
+                    }) 
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    alert("Schedule Updated successfully!");
+                } else {
+                    alert("SERVER ERROR: " + data.message);
+                }
+            } catch (err) {
+                alert("CONNECTION ERROR: Could not reach the server.");
+            }
+        }
+
+        async function saveRetentionSettings() {
+            const days = document.getElementById('log-retention-days').value;
+            if (!days || days < 1) {
+                alert("Please enter a valid number of days (1-365).");
+                return;
+            }
+            try {
+                const res = await fetch('/update_retention', { 
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }, 
+                    body: JSON.stringify({ days: days }) 
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    alert("Data Retention Policy Updated successfully!");
+                } else {
+                    alert("SERVER ERROR: " + data.message);
+                }
+            } catch (err) {
+                alert("CONNECTION ERROR: Could not reach the server.");
+            }
+        }
+
+        async function toggleAnonymize() {
+            const toggle = document.getElementById('anonymize-toggle');
+            const isEnabled = toggle.checked;
+            
+            try {
+                const res = await fetch('/update_anonymize_mode', { 
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }, 
+                    body: JSON.stringify({ enabled: isEnabled }) 
+                });
+                const data = await res.json();
+                
+                if (data.status !== 'success') {
+                    alert("SERVER ERROR: " + data.message);
+                    toggle.checked = !isEnabled; 
+                }
+            } catch (err) {
+                alert("CONNECTION ERROR: Could not reach the server.");
+                toggle.checked = !isEnabled; 
+            }
+        }
+
+        async function savePrivacyZone() {
+            try {
+                const payload = {
+                    enabled: document.getElementById('privacy-zone-toggle').checked,
+                    x1: document.getElementById('pz-x1').value,
+                    y1: document.getElementById('pz-y1').value,
+                    x2: document.getElementById('pz-x2').value,
+                    y2: document.getElementById('pz-y2').value
+                };
+                
+                const res = await fetch('/update_privacy_zone', { 
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }, 
+                    body: JSON.stringify(payload) 
+                });
+                
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert("Privacy Mask updated! The camera feed will blur this region immediately.");
+                } else {
+                    alert("SERVER ERROR: " + data.message);
+                }
+            } catch (err) {
+                alert("CONNECTION ERROR: Could not reach the server.");
+            }
+        }
+
+        let currentLogView = 'system';
+
+        function switchLogView(view) {
+            currentLogView = view;
+            
+            const btnSystem = document.getElementById('btn-system-logs');
+            const btnAudit = document.getElementById('btn-audit-logs');
+            
+            if (view === 'system') {
+                if(btnSystem) btnSystem.className = "px-3 py-1 text-xs font-bold rounded bg-indigo-600 text-white transition-colors";
+                if(btnAudit) btnAudit.className = "px-3 py-1 text-xs font-bold rounded text-gray-400 hover:text-white transition-colors";
+                loadFullHistory();
+            } else {
+                if(btnAudit) btnAudit.className = "px-3 py-1 text-xs font-bold rounded bg-indigo-600 text-white transition-colors";
+                if(btnSystem) btnSystem.className = "px-3 py-1 text-xs font-bold rounded text-gray-400 hover:text-white transition-colors";
+                loadAuditLogs();
+            }
+        }
+
+        async function loadAuditLogs() {
+            const container = document.getElementById('full-history-container');
+            container.innerHTML = 'Loading Audit Trail...';
+            try {
+                const res = await fetch('/api/audit_logs', {
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                
+                if (res.status === 403) {
+                    container.innerHTML = '<span class="text-rose-500">Access Denied. Admins only.</span>';
+                    return;
+                }
+                
+                const data = await res.json();
+                container.innerHTML = '';
+                
+                if (data.length === 0) {
+                    container.innerHTML = '<span class="text-gray-500">No audit logs found.</span>';
+                    return;
+                }
+
+                data.forEach(log => {
+                    const div = document.createElement('div');
+                    div.className = "py-2 border-b border-gray-800 flex flex-col";
+                    
+                    const timeOnly = log.timestamp.split(' ')[1];
+                    
+                    div.innerHTML = `
+                        <div class="flex items-center gap-2 mb-1 text-sm">
+                            <span class="opacity-50 text-gray-500">[${timeOnly}]</span>
+                            <span class="text-indigo-400 font-bold">${log.username}</span>
+                            <span class="text-gray-300 bg-gray-800 px-2 py-0.5 rounded text-[10px] uppercase border border-gray-700">${log.action}</span>
+                        </div>
+                        <span class="pl-[75px] text-xs text-gray-500">${log.details || ''}</span>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) { container.innerHTML = "Error loading audit logs."; }
+        }
+
+        async function loadFullHistory() {
+            const container = document.getElementById('full-history-container');
+            container.innerHTML = 'Loading...';
+            try {
+                const res = await fetch('/get_full_logs');
+                const data = await res.json();
+                container.innerHTML = '';
+                data.logs.forEach(line => {
+                    const div = document.createElement('div');
+                    div.className = "py-1 border-b border-gray-800 text-gray-400";
+                    div.innerHTML = formatLogLine(line);
+                    container.appendChild(div);
+                });
+            } catch(e) { container.innerHTML = "Error loading history"; }
+        }
+
+        function clearLiveView() { logContainer.innerHTML = ''; }
+        
+        async function wipeServerLogs() {
+             if(confirm("Delete all logs permanently?")) {
+                 await fetch('/clear_logs', { 
+                     method: 'POST',
+                     headers: { 'X-CSRFToken': csrfToken }
+                 });
+                 closeHistory();
+             }
+        }
+    </script>
+</body>
+</html>

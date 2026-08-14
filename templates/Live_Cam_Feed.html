@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Surveillance Feed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { serif: ['Times New Roman', 'serif'] } } }
+        }
+    </script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- SocketIO library -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <style>
+        /* Visual alarm */
+        @keyframes flash-red {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+        .alarm-active {
+            animation: flash-red 1s ease-in-out 3; /* Flash 3 times */
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-black text-gray-100 flex flex-col relative overflow-hidden">
+
+   
+    <!-- Flashes red border when unauthorized person is emailed -->
+    <div id="visual-alarm" class="fixed inset-0 pointer-events-none z-[100] border-[20px] border-red-600 opacity-0 shadow-[inset_0_0_100px_rgba(220,38,38,0.5)]"></div>
+
+    <!-- Header / Navigation -->
+    <div class="absolute top-0 left-0 w-full p-4 bg-gradient-to-b from-black/80 to-transparent z-10 flex justify-between items-center">
+        <a href="/" class="flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full transition-colors backdrop-blur-md border border-gray-600">
+            <i class="ph-bold ph-arrow-left"></i>
+            <span class="text-sm font-semibold">Dashboard</span>
+        </a>
+        
+        <div class="flex items-center gap-3">
+            <div id="status-indicator" class="flex items-center gap-2 px-3 py-1.5 bg-green-900/80 border border-green-700 rounded-full backdrop-blur-md">
+                <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                <span class="text-xs font-bold text-green-100 tracking-wide">LIVE</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main video feed -->
+    <div class="flex-1 flex items-center justify-center bg-gray-900 relative">
+        <!-- Loading Placeholder -->
+        <div class="absolute inset-0 flex items-center justify-center text-gray-500 z-0">
+            <div class="text-center">
+                <i class="ph-duotone ph-video-camera-slash text-4xl mb-2"></i>
+                <p>Connecting to stream...</p>
+            </div>
+        </div>
+
+        <!-- Stream image, https supported -->
+        <img src="https://{{ pi_ip }}:5001/stream.mjpg" 
+             class="relative z-1 max-w-full max-h-screen object-contain shadow-2xl"
+             onerror="this.style.display='none'; document.getElementById('status-indicator').classList.replace('bg-green-900/80', 'bg-red-900/80');"
+             alt="Live Security Feed">
+    </div>
+
+    <!-- Alert status message -->
+    <div id="alert-banner" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-red-600 text-white font-bold rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 z-50 flex items-center gap-3">
+        <i class="ph-bold ph-warning-circle text-xl"></i>
+        <span>UNAUTHORIZED PERSON - EMAIL ALERT SENT</span>
+    </div>
+
+    <script>
+        const visualAlarm = document.getElementById('visual-alarm');
+        const alertBanner = document.getElementById('alert-banner');
+        
+        
+        const socket = io();
+
+        
+        function triggerVisualAlarm() {
+            // Flash Screen
+            visualAlarm.classList.add('alarm-active');
+            
+            // Show Banner
+            alertBanner.classList.remove('translate-y-20', 'opacity-0');
+
+            // Reset after 3 seconds
+            setTimeout(() => {
+                visualAlarm.classList.remove('alarm-active');
+                alertBanner.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // -- Listen for events --
+        // Replaces the old polling loop. 
+        // Waits for a specific broadcast from the server.
+        socket.on('security_event', (data) => {
+            console.log("Received event:", data);
+            
+            // Check specifically for the email trigger phrase
+            if (data.message && data.message.includes("ALERT: Sending email")) {
+                triggerVisualAlarm();
+            }
+        });
+    </script>
+</body>
+</html>
