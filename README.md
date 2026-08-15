@@ -31,8 +31,18 @@ python3 Backend_App.py
 
 ## Overall Project Structure and File Index:
 ### Core Files
-- **Backend_App.py:**
-Acts as the central Flask backend. It handles the HTTPS routing, secure API endpoints, SQLite database tables, login routing, APScheduler background tasks, statistical baselines, periodic comprehensive emails, and data retention.
-- **Camera_Script.py:**
-Manages the hardware camera and data associated with it. Runs the OpenCV camera inference loop, applies hardware privacy zones, streams raw video frames to local port, and generates anomaly emails.
-- **config.py:** Centralized configuration module that houses algorithmic grace periods, 
+- **Backend_App.py:** Acts as the central Flask backend. It handles the HTTPS routing, secure API endpoints, SQLite database tables, login routing, APScheduler background tasks, statistical baselines, periodic comprehensive emails, and data retention.
+- **Camera_Script.py:** Manages the hardware camera and data associated with it. Runs the OpenCV camera inference loop, applies hardware privacy zones, streams raw video frames to local port, and generates anomaly emails.
+- **config.py:** Centralized configuration module that houses algorithmic grace periods, authorized users list, quiet hour time period, and max visit duration.
+- **requirements.txt:** List of all of the packages/libraries used in the development of this project.
+
+### Frontend Interface (/templates)
+- **Best_Dashboard.html:** The main administrative dashboard. Built with Tailwind CSS, it facilitates real-time WebSocket updates, system controls, user controlled settings, live event logs, and occupancy statistics.
+- **Login_Page.html:** Secure authentication page. It is protected by CSRF handshakes and is the first page a user arrives at when the system boots. Interfaces with backend's Bcrypt hashing to verify passwords and permit/deny access to the main dashboard.
+- **Live_Cam_Feed.html:** UI for viewing the live camera feed by polling Camera_Script.py. Also contains visual indicators during atypical detections.
+
+### Secured Files: (.gitignore)
+- **surveillance.db:** Contains the entire SQLite database storing detection logs, audits, system reports, user login credentials (hashed only), and the email archive.
+- **settings.json:** Hardware state file managing privacy zone coordinates, data retention lengths, and anonymization toggles.
+- **baselines.json:** File containing the averages and stdev calculations. Accessible by the user via the dashboard and data is used to perform anomaly calculations.
+- **encodings.pickle:** Fernet-encrypted file that contains the facial recognition vectors.
