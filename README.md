@@ -28,3 +28,11 @@ In the main folder, run this command to boot up the system:
 ```bash
 python3 Backend_App.py
 ```
+
+## Overall Project Structure and File Index:
+### Core Files
+- **Backend_App.py:**
+Acts as the central Flask backend. It handles the HTTPS routing, secure API endpoints, SQLite database tables, login routing, APScheduler background tasks, statistical baselines, periodic comprehensive emails, and data retention.
+- **Camera_Script.py:**
+Manages the hardware camera and data associated with it. Runs the OpenCV camera inference loop, applies hardware privacy zones, streams raw video frames to local port, and generates anomaly emails.
+- **config.py:** Centralized configuration module that houses algorithmic grace periods, 
