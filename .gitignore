@@ -18,11 +18,17 @@ instance/
 
 # Logs and Debug files
 *.log
-*.txt
+.txt
 system_debug.txt
 flask_auth.log
 security_events.log
 camera_log.txt
+
+#TPM-related files
+*.ctx
+*.priv
+*.pub
+
 
 # Python Cache
 __pycache__/
@@ -31,6 +37,12 @@ venv/
 
 # Python files
 admincreatorscript.py
+viewercreatorscript.py
+good_facial_recognition.py
+facial_recognition_hardware_with_emailandduration.py
+facial_recognition.py
+check_db.py
+
 
 # Cryptographic Keys
 *.pem
