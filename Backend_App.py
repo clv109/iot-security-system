@@ -243,7 +243,7 @@ def admin_required(f):
         if not current_user.is_authenticated:
             return redirect(url_for('login'))
 
-        
+
         if current_user.role != "Admin":
             log_system_event("WARNING", "Access Denied", f"Viewer '{current_user.username}' attempted to use an Admin control.")
             abort(403)
@@ -408,17 +408,18 @@ def get_fernet_encryption_key():
     """Unseals the master Fernet key from the TPM2.0 hardware"""
     #Load key into volatile RAM on TPM
     loadingFernet = subprocess.run(
-		["tpm2_load", "-C","0x81010001", "-u","Fernetkey.pub", "-r","Fernetkey.priv", "-c","Fernetkey.ctx"],
-		capture_output=True, text=True #Load Fernet key priv/pub file into TPM
+	["tpm2_load", "-C","0x81010001", "-u","Fernetkey.pub", "-r","Fernetkey.priv", "-c","Fernetkey.ctx"],
+	capture_output=True, text=True #Load Fernet key priv/pub file into TPM
 )
     # Check if the load command failed
     if loadingFernet.returncode != 0:
         print(f"[ERROR] Failed to load Fernet key: {loadingFernet.stderr}")
         return None
+
     # Unseal the key
-	Fernet_key = subprocess.run(
-		["tpm2_unseal", "-c","Fernetkey.ctx"], #Unseal Fernet key
-		capture_output=True, text=True
+    Fernet_key = subprocess.run(
+	["tpm2_unseal", "-c","Fernetkey.ctx"], #Unseal Fernet key
+	capture_output=True, text=True
 )
     # Verify success and extract the text
     if Fernet_key.returncode == 0:
