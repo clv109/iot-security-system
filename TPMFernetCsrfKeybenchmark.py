@@ -38,3 +38,4 @@ avg_time = total_time / iterations * 1000 #Multiply by 1000 to convert to millis
 
 print(f"Total time for {iterations} reads: {total_time} seconds")
 print(f"Average latency for a singular read: {avg_time:.4f} milliseconds")
+
