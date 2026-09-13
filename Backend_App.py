@@ -5,7 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
-import subprocess
+import subprocess #subprocess imported to run commands on Raspberry Pi terminal via this python file
 import os
 import signal
 import sys
@@ -25,6 +25,7 @@ import math
 import statistics
 import requests
 
+
 # Imported modules for EMAIl capalibity
 import smtplib
 from email.mime.text import MIMEText
@@ -35,11 +36,42 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
 
+
+def get_flask_csrf_key():
+    """Unseals the CSRF key from the TPM2.0 hardware"""
+    #Load CSRF key into volatile RAM on TPM
+    loadingCSRF = subprocess.run(
+		["tpm2_load", "-C","0x81010001", "-u","HMACcsrf.pub", "-r","HMACcsrf.priv", "-c","HMACcsrf.ctx"],
+		capture_output=True, text=True #Load CSRF key priv/pub file into TPM
+    )
+    # Check if the load command failed
+    if loadingCSRF.returncode != 0: #.returncode is attribute of subprocess library, value of 0 means sucess, != 0 indicates error
+        print(f"[ERROR] Failed to load CSRF key: {loadingCSRF.stderr}")
+        return None
+    # Unseal the key
+	CSRF_key = subprocess.run(
+		["tpm2_unseal", "-c","HMACcsrf.ctx"], #Unseal CSRF key
+		capture_output=True, text=True
+)
+    # Verify success and extract the text
+    if CSRF_key.returncode == 0:
+        # Extract the string and strip hidden whitespace
+        CSRF_key_string = CSRF_key.stdout.strip() #key is in plaintext under stdout and we strip() to remove the \n at the end
+        return CSRF_key_string
+
+    print("[WARNING] CSRF key not found in vault! System security potentially compromised.")
+    return None
+
+
 # Load envionrment variables (containing secrets/passwords)
 load_dotenv("secretcredentials.env")
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY")
+app.config['SECRET_KEY'] = get_flask_csrf_key() # Assign SECRET_KEY to the unsealed key from the TPM
+
+if not app.config["SECRET_KEY"]: # Check to ensure CSRF key loaded properly
+    print("[FATAL ERROR] TPM failed to unseal Flask CSRF key. Shutting down server to prevent vulnerabilities from being exploited.")
+    sys.exit(1)
 
 # Secure cookie configurations
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -371,11 +403,27 @@ def is_running():
     except (OSError, ValueError, subprocess.CalledProcessError):
         return False
 
-def get_encryption_key():
-    """Loads the master encryption key from the environment vault."""
-    biometric_key = os.getenv("BIOMETRIC_KEY")
-    if biometric_key:
-        return biometric_key.encode('utf-8') # Convert string to bytes for Fernet
+def get_fernet_encryption_key():
+    """Unseals the master Fernet key from the TPM2.0 hardware"""
+    #Load key into volatile RAM on TPM
+    loadingFernet = subprocess.run(
+		["tpm2_load", "-C","0x81010001", "-u","Fernetkey.pub", "-r","Fernetkey.priv", "-c","Fernetkey.ctx"],
+		capture_output=True, text=True #Load Fernet key priv/pub file into TPM
+)
+    # Check if the load command failed
+    if loadingFernet.returncode != 0:
+        print(f"[ERROR] Failed to load Fernet key: {loadingFernet.stderr}")
+        return None
+    # Unseal the key
+	Fernet_key = subprocess.run(
+		["tpm2_unseal", "-c","Fernetkey.ctx"], #Unseal Fernet key
+		capture_output=True, text=True
+)
+    # Verify success and extract the text
+    if Fernet_key.returncode == 0:
+        # Extract the string and strip hidden whitespace
+        fernet_key_string = Fernet_key.stdout.strip() 
+        return fernet_key_string
 
     print("[WARNING] BIOMETRIC_KEY not found in vault! Biometrics will not be encrypted.")
     return None
@@ -1064,7 +1112,7 @@ def register_user():
         pickled_data = pickle.dumps(data)
 
         # extract master encryption key
-        key = get_encryption_key()
+        key = get_fernet_encryption_key()
 
         if key:
             # secure data with Fernet
