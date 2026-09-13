@@ -371,8 +371,8 @@ def is_running():
     except (OSError, ValueError, subprocess.CalledProcessError):
         return False
 
-def get_encryption_key():
-    """Loads the master encryption key from the environment vault."""
+def get_fernet_encryption_key():
+    """Unseals the master Fernet key from the TPM2.0 hardware"""
     biometric_key = os.getenv("BIOMETRIC_KEY")
     if biometric_key:
         return biometric_key.encode('utf-8') # Convert string to bytes for Fernet
@@ -1064,7 +1064,7 @@ def register_user():
         pickled_data = pickle.dumps(data)
 
         # extract master encryption key
-        key = get_encryption_key()
+        key = get_fernet_encryption_key()
 
         if key:
             # secure data with Fernet
