@@ -48,11 +48,12 @@ def get_flask_csrf_key():
     if loadingCSRF.returncode != 0: #.returncode is attribute of subprocess library, value of 0 means sucess, != 0 indicates error
         print(f"[ERROR] Failed to load CSRF key: {loadingCSRF.stderr}")
         return None
+		
     # Unseal the key
 	CSRF_key = subprocess.run(
 		["tpm2_unseal", "-c","HMACcsrf.ctx"], #Unseal CSRF key
 		capture_output=True, text=True
-)
+	)
     # Verify success and extract the text
     if CSRF_key.returncode == 0:
         # Extract the string and strip hidden whitespace
