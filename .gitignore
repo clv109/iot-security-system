@@ -5,6 +5,7 @@ secretcredentials.env
 # Biometric Data & Images
 dataset/
 encodings.pickle
+identifiers.txt
 *.jpg
 *.jpeg
 *.png
