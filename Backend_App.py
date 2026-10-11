@@ -51,11 +51,11 @@ def get_flask_csrf_key():
 
     # Unseal the key
     CSRF_key = subprocess.run(
-	["tpm2_unseal", "-c","HMACcsrf.ctx"], #Unseal CSRF key
-	capture_output=True, text=True
+		["tpm2_unseal", "-c","HMACcsrf.ctx"], #Unseal CSRF key
+		capture_output=True, text=True
     )
     # Verify success and extract the text
-    if CSRF_key.returncode == 0:
+    if CSRF_key.returncode == 0: #suprocess .returncode == 0 indicate no errors occurred
         # Extract the string and strip hidden whitespace
         CSRF_key_string = CSRF_key.stdout.strip() #key is in plaintext under stdout and we strip() to remove the \n at the end
         return CSRF_key_string
@@ -63,9 +63,42 @@ def get_flask_csrf_key():
     print("[WARNING] CSRF key not found in vault! System security potentially compromised.")
     return None
 
+def extract_identifiers(): 
+	identity_list = []
+	"""Unseal the personal identifiers (authorized names taken from config.py) from the TPM2.0 hardware"""
+	#Load identifiers into TPM
+	loading_identifiers = subprocess.run(
+		["tpm2_load", "-C","0x81010001", "-u","identifiers.pub", "-r","identifiers.priv", "-c","identifiers.ctx"],
+		capture_output=True, text=True 
+    )
 
-# Load envionrment variables (containing secrets/passwords)
+	# Verify loading is sucessful
+	if loading_identifiers.returncode != 0: #.returncode is attribute of subprocess library, value of 0 means sucess, != 0 indicates error
+        print(f"[ERROR] Failed to load CSRF key: {loading_identifiers.stderr}")
+        return None
+
+	# Unseal the personal identifiers
+	identity = subprocess.run(
+		["tpm2_unseal", "-c","identifiers.ctx"], 
+		capture_output=True, text=True
+    )
+
+	# Verify success and extract the text
+    if identity.returncode == 0: #suprocess .returncode == 0 indicate no errors occurred
+        # Extract the string and strip hidden whitespace
+        for line in identity.stdout.split('\n'):
+			cleaned_name = line.strip() #remove whitespaces
+			if cleaned_name: # Check if the line is not empty
+        		# Add the valid name to the list
+        		identity_list.append(cleaned_name)
+
+	return identity_list
+
+# Load environment variables (containing secrets/passwords)
 load_dotenv("secretcredentials.env")
+
+# Load personal identifiers from TPM (we run it here as logbal variable to ensure it runs only once)
+Authorized_names_ram = extract_identifiers() or []
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = get_flask_csrf_key() # Assign SECRET_KEY to the unsealed key from the TPM
@@ -1004,7 +1037,8 @@ def update_privacy_zone():
 @login_required
 def get_authorized_users():
     try:
-        names = config.AUTHORIZED_NAMES
+        #names = config.AUTHORIZED_NAMES
+		names = Authorized_names_ram
         return jsonify(status="success", count=len(names), names=names)
     except Exception as e:
         return jsonify(status="error", message=str(e), count=0, names=[])
