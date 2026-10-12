@@ -64,35 +64,33 @@ def get_flask_csrf_key():
     return None
 
 def extract_identifiers(): 
-	identity_list = []
-	"""Unseal the personal identifiers (authorized names taken from config.py) from the TPM2.0 hardware"""
-	#Load identifiers into TPM
-	loading_identifiers = subprocess.run(
-		["tpm2_load", "-C","0x81010001", "-u","identifiers.pub", "-r","identifiers.priv", "-c","identifiers.ctx"],
-		capture_output=True, text=True 
+    """Unseal the personal identifiers from the TPM2.0 hardware"""
+    identity_list = []
+    
+    # Load identifiers into TPM
+    loading_identifiers = subprocess.run(
+        ["tpm2_load", "-C","0x81010001", "-u","identifiers.pub", "-r","identifiers.priv", "-c","identifiers.ctx"],
+        capture_output=True, text=True 
     )
 
-	# Verify loading is sucessful
-	if loading_identifiers.returncode != 0: #.returncode is attribute of subprocess library, value of 0 means sucess, != 0 indicates error
-        print(f"[ERROR] Failed to load CSRF key: {loading_identifiers.stderr}")
+    #Ensure loading has occured without issue
+    if loading_identifiers.returncode != 0: 
+        print(f"[ERROR] Failed to load identifiers: {loading_identifiers.stderr}")
         return None
 
-	# Unseal the personal identifiers
-	identity = subprocess.run(
-		["tpm2_unseal", "-c","identifiers.ctx"], 
-		capture_output=True, text=True
+    # Unseal identifiers
+    identity = subprocess.run(
+        ["tpm2_unseal", "-c","identifiers.ctx"], 
+        capture_output=True, text=True
     )
 
-	# Verify success and extract the text
-    if identity.returncode == 0: #suprocess .returncode == 0 indicate no errors occurred
-        # Extract the string and strip hidden whitespace
+    if identity.returncode == 0: #Ensure identifiers properly extracted
         for line in identity.stdout.split('\n'):
-			cleaned_name = line.strip() #remove whitespaces
-			if cleaned_name: # Check if the line is not empty
-        		# Add the valid name to the list
-        		identity_list.append(cleaned_name)
+            cleaned_name = line.strip() 
+            if cleaned_name:
+                identity_list.append(cleaned_name) # Add identifiers to returned list
 
-	return identity_list
+    return identity_list
 
 # Load environment variables (containing secrets/passwords)
 load_dotenv("secretcredentials.env")
@@ -1038,7 +1036,7 @@ def update_privacy_zone():
 def get_authorized_users():
     try:
         #names = config.AUTHORIZED_NAMES
-		names = Authorized_names_ram
+        names = Authorized_names_ram
         return jsonify(status="success", count=len(names), names=names)
     except Exception as e:
         return jsonify(status="error", message=str(e), count=0, names=[])
