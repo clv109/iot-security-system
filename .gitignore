@@ -43,7 +43,7 @@ good_facial_recognition.py
 facial_recognition_hardware_with_emailandduration.py
 facial_recognition.py
 check_db.py
-
+config.py
 
 # Cryptographic Keys
 *.pem
