@@ -66,21 +66,21 @@ def get_flask_csrf_key():
 def extract_identifiers(): 
     """Unseal the personal identifiers from the TPM2.0 hardware"""
     identity_list = []
-    
+
     # Load identifiers into TPM
     loading_identifiers = subprocess.run(
         ["tpm2_load", "-C","0x81010001", "-u","identifiers.pub", "-r","identifiers.priv", "-c","identifiers.ctx"],
-        capture_output=True, text=True 
+        capture_output=True, text=True
     )
 
     #Ensure loading has occured without issue
-    if loading_identifiers.returncode != 0: 
+    if loading_identifiers.returncode != 0:
         print(f"[ERROR] Failed to load identifiers: {loading_identifiers.stderr}")
         return None
 
     # Unseal identifiers
     identity = subprocess.run(
-        ["tpm2_unseal", "-c","identifiers.ctx"], 
+        ["tpm2_unseal", "-c","identifiers.ctx"],
         capture_output=True, text=True
     )
 
@@ -94,7 +94,7 @@ def extract_identifiers():
 
 def establish_pseudonyms(name_list): # Parameter: identity_list, list containing personal identifiers to be pseudoynmized
 	mappings = {} # establish dictionary for simple key:value pair to relate pseudoynms to personal identifiers
-	
+
 	# Load the TPM's HMAC key into the TPM 2.0 hardware
 	load_hmac = subprocess.run(
         ["tpm2_load", "-C","0x81010001", "-u","TPMhmac.pub", "-r","TPMhmac.priv", "-c","TPMhmac.ctx"],
@@ -102,9 +102,9 @@ def establish_pseudonyms(name_list): # Parameter: identity_list, list containing
     )
 
 	#Ensure loading has occured without issue
-    if load_hmac.returncode != 0: 
-        print(f"[ERROR] Failed to load TPM HMAC key: {load_hmac.stderr}")
-        return None
+	if load_hmac.returncode != 0:
+        	print(f"[ERROR] Failed to load TPM HMAC key: {load_hmac.stderr}")
+        	return None
 
 	for name in name_list: # Loop through all of the identifiers 
 		pseudonym = subprocess.run(
