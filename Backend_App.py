@@ -92,11 +92,44 @@ def extract_identifiers():
 
     return identity_list
 
+def establish_pseudonyms(name_list): # Parameter: identity_list, list containing personal identifiers to be pseudoynmized
+	mappings = {} # establish dictionary for simple key:value pair to relate pseudoynms to personal identifiers
+	
+	# Load the TPM's HMAC key into the TPM 2.0 hardware
+	load_hmac = subprocess.run(
+        ["tpm2_load", "-C","0x81010001", "-u","TPMhmac.pub", "-r","TPMhmac.priv", "-c","TPMhmac.ctx"],
+        capture_output=True, text=True
+    )
+
+	#Ensure loading has occured without issue
+    if load_hmac.returncode != 0: 
+        print(f"[ERROR] Failed to load TPM HMAC key: {load_hmac.stderr}")
+        return None
+
+	for name in name_list: # Loop through all of the identifiers 
+		pseudonym = subprocess.run(
+        ["tpm2_hmac", "-c","TPMhmac.ctx", "--hex"],
+        input=name, capture_output=True, text=True # No need to echo, use input=name instead. Performs the same action as echo by piping elements of names into tpm2_hmac to be pseudonymized
+		)
+		if pseudonym.returncode == 0: # Ensure pseudonyms created without issue
+			mappings[name] = pseudonym.stdout.strip() # Create dictionary mapping with person's name as key, then name's pseudonym as value
+		else: 
+			print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
+
+	return mappings
+
 # Load environment variables (containing secrets/passwords)
 load_dotenv("secretcredentials.env")
 
-# Load personal identifiers from TPM (we run it here as logbal variable to ensure it runs only once)
+# Load personal identifiers from TPM (we run it here as global variable to ensure it runs only once)
 Authorized_names_ram = extract_identifiers() or []
+
+# Generate pseudonyms for personal identiifers from TPM (we run it here as global variable to ensure it runs only once)
+Names_pseudonyms = establish_pseudonyms(Authorized_names_ram) or {}
+
+###CURRENTLY A TEST, REMOVE WHEN FULL SYSTEM IS WORKING
+print(Names_pseudonyms)
+###
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = get_flask_csrf_key() # Assign SECRET_KEY to the unsealed key from the TPM
