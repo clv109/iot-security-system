@@ -763,7 +763,7 @@ while True:
                 
                 db_name = name 
                 if is_auth and is_anonymized_mode():
-                    db_name = "Authorized User"
+                    db_name = Names_pseudonyms[name]
                 
                 db_id = log_event_to_db(status, person_name=db_name) 
                 
