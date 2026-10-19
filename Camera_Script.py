@@ -791,7 +791,7 @@ while True:
             if clean_name not in active_visits:
                 status = "Authorized" if is_auth else "Unauthorized"
                 
-                db_name = name 
+                db_name = clean_name # Log the cleaner version of a name without space when Anonymized mode is off
 
                 if is_auth and is_anonymized_mode():
                     db_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, "Unknown") 
