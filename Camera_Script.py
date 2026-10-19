@@ -349,6 +349,8 @@ def get_privacy_settings():
         
     return enabled, coords
 
+
+# This function is now OBSOLETE, replaced with the get_fernet_encryption_key() function
 def get_encryption_key():
     biometric_key = os.getenv("BIOMETRIC_KEY")
     if biometric_key:
