@@ -648,11 +648,11 @@ try:
     with open("encodings.pickle", "rb") as f:
         raw_file_data = f.read()
             
-    key = get_encryption_key()
+    key = get_fernet_encryption_key()
     
     if key: # Decrypting the encrypted encodings.pickle file
         try:
-            fernet_padlock = get_fernet_encryption_key()
+            fernet_padlock = Fernet(key)
             decrypted_bytes = fernet_padlock.decrypt(raw_file_data)
             data = pickle.loads(decrypted_bytes)
             log_event("Biometric data securely decrypted in RAM.", priority="INFO")
