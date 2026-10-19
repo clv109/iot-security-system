@@ -93,30 +93,31 @@ def extract_identifiers():
     return identity_list
 
 def establish_pseudonyms(name_list): # Parameter: identity_list, list containing personal identifiers to be pseudoynmized
-        mappings = {} # establish dictionary for simple key:value pair to relate pseudoynms to personal identifiers
+    mappings = {} # establish dictionary for simple key:value pair to relate pseudoynms to personal identifiers
 
-        # Load the TPM's HMAC key into the TPM 2.0 hardware
-        load_hmac = subprocess.run(
-        ["tpm2_load", "-C","0x81010001", "-u","TPMhmac.pub", "-r","TPMhmac.priv", "-c","TPMhmac.ctx"],
-        capture_output=True, text=True
-    )
+    # Load the TPM's HMAC key into the TPM 2.0 hardware
+    load_hmac = subprocess.run(
+    ["tpm2_load", "-C","0x81010001", "-u","TPMhmac.pub", "-r","TPMhmac.priv", "-c","TPMhmac.ctx"],
+    capture_output=True, text=True
+)
 
-        #Ensure loading has occured without issue
-        if load_hmac.returncode != 0:
-                print(f"[ERROR] Failed to load TPM HMAC key: {load_hmac.stderr}")
-                return None
+    #Ensure loading has occured without issue
+    if load_hmac.returncode != 0:
+            print(f"[ERROR] Failed to load TPM HMAC key: {load_hmac.stderr}")
+            return None
 
-        for name in name_list: # Loop through all of the identifiers 
-                pseudonym = subprocess.run(
-        ["tpm2_hmac", "-c","TPMhmac.ctx", "--hex"],
-        input=name, capture_output=True, text=True # No need to echo, use input=name instead. Performs the same action as echo by piping elements of names into tpm2_hmac to be pseudonymized
-                )
-                if pseudonym.returncode == 0: # Ensure pseudonyms created without issue
+    for name in name_list: # Loop through all of the identifiers 
+            pseudonym = subprocess.run(
+            ["tpm2_hmac", "-c","TPMhmac.ctx", "--hex"],
+            input=name, capture_output=True, text=True # No need to echo, use input=name instead. Performs the same action as echo by piping elements of names into tpm2_hmac to be pseudonymized
+            )
+        
+            if pseudonym.returncode == 0: # Ensure pseudonyms created without issue
                         mappings[name] = pseudonym.stdout.strip() # Create dictionary mapping with person's name as key, then name's pseudonym as value
-                else: 
-                        print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
+            else: 
+                    print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
 
-        return mappings
+    return mappings
 
 
 # Load personal identifiers from TPM (we run it here as global variable to ensure it runs only once)
@@ -587,7 +588,7 @@ def draw_results(frame, locations, names):
         is_authorized = False
         if name in Authorized_names_ram: #Authorized_names_ram is the list of personal identifiers we have extracted from the TPM, replaces extraction from config.py
             is_authorized = True
-        elif name.replace('_', ' ') in Authorized_names_ram
+        elif name.replace('_', ' ') in Authorized_names_ram:
             is_authorized = True
             name = name.replace('_', ' ') 
         
@@ -762,8 +763,10 @@ while True:
                 status = "Authorized" if is_auth else "Unauthorized"
                 
                 db_name = name 
+
                 if is_auth and is_anonymized_mode():
-                    db_name = Names_pseudonyms[name]
+                    db_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, "Unknown") 
+                    # Use get method for dictionary instead of Names_pseudonyms[name] to ensure no KeyError is every returned, thus crashing program
                 
                 db_id = log_event_to_db(status, person_name=db_name) 
                 
