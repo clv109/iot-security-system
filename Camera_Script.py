@@ -63,6 +63,7 @@ active_visits = {}
 VISIT_BUFFER = 5.0 
 
 # --TPM Functions--
+
 def extract_identifiers(): 
     """Unseal the personal identifiers from the TPM2.0 hardware"""
     identity_list = []
@@ -118,6 +119,32 @@ def establish_pseudonyms(name_list): # Parameter: identity_list, list containing
                     print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
 
     return mappings
+
+def get_fernet_encryption_key():
+    """Unseals the master Fernet key from the TPM2.0 hardware"""
+    #Load key into volatile RAM on TPM
+    loadingFernet = subprocess.run(
+	["tpm2_load", "-C","0x81010001", "-u","Fernetkey.pub", "-r","Fernetkey.priv", "-c","Fernetkey.ctx"],
+	capture_output=True, text=True #Load Fernet key priv/pub file into TPM
+)
+    # Check if the load command failed
+    if loadingFernet.returncode != 0:
+        print(f"[ERROR] Failed to load Fernet key: {loadingFernet.stderr}")
+        return None
+
+    # Unseal the key
+    Fernet_key = subprocess.run(
+	["tpm2_unseal", "-c","Fernetkey.ctx"], #Unseal Fernet key
+	capture_output=True, text=True
+)
+    # Verify success and extract the text
+    if Fernet_key.returncode == 0:
+        # Extract the string and strip hidden whitespace
+        fernet_key_string = Fernet_key.stdout.strip() 
+        return fernet_key_string
+
+    print("[WARNING] BIOMETRIC_KEY not found in vault! Biometrics will not be encrypted.")
+    return None
 
 
 # Load personal identifiers from TPM (we run it here as global variable to ensure it runs only once)
@@ -625,7 +652,7 @@ try:
     
     if key: # Decrypting the encrypted encodings.pickle file
         try:
-            fernet_padlock = Fernet(key)
+            fernet_padlock = get_fernet_encryption_key()
             decrypted_bytes = fernet_padlock.decrypt(raw_file_data)
             data = pickle.loads(decrypted_bytes)
             log_event("Biometric data securely decrypted in RAM.", priority="INFO")
