@@ -640,6 +640,7 @@ def get_detection_stats():
         events = DetectionEvent.query.filter(DetectionEvent.timestamp >= start_date).order_by(DetectionEvent.timestamp.asc()).all()
 
         from collections import defaultdict
+		# Use defaultdict to effectively make nested dictionaries 
 
         stats = defaultdict(lambda: {'auth': 0, 'unauth': 0})
 
@@ -672,6 +673,7 @@ def update_statistical_baselines():
         try:
             print("[REPORT ENGINE] Recalculating statistical traffic baselines...")
             from collections import defaultdict
+			# Use defaultdict to effectively make nested dictionaries 
 
             cutoff_date = datetime.now() - timedelta(days=50)
 
@@ -682,8 +684,10 @@ def update_statistical_baselines():
             traffic_data = {
                 "Weekday": defaultdict(lambda: defaultdict(int)),
                 "Weekend": defaultdict(lambda: defaultdict(int))
+				# Set up the nested dictionary: defaultdict with lambda as the hour, int as the date
             }
             unique_days = {"Weekday": set(), "Weekend": set()}
+			# Use set() to ensure we don't have duplicate dates added
 
             for e in events:
                 dt = e.timestamp
@@ -691,33 +695,34 @@ def update_statistical_baselines():
                 hour = dt.hour
 
                 bucket = "Weekend" if dt.weekday() >= 5 else "Weekday"
-                traffic_data[bucket][hour][date_key] += 1
-                unique_days[bucket].add(date_key)
+                traffic_data[bucket][hour][date_key] += 1  #Checks back to the nested dictionary (and adds the hour/date if not there), adding 1 for one event at a certain timestamp
+                unique_days[bucket].add(date_key) #Add dates to unique_days dictionary so we can count up the total # of weekdays/weekends we have data for
 
             num_weekdays = len(unique_days["Weekday"])
             num_weekends = len(unique_days["Weekend"])
 
             baselines = {"Weekday": {}, "Weekend": {}}
 
-            for bucket in ["Weekday", "Weekend"]:
-                num_days = len(unique_days[bucket])
+            for bucket in ["Weekday", "Weekend"]: # Two iterations: first calculataes for weekdays, then weekends
+                num_days = len(unique_days[bucket]) # Total of number of days for weekday (first iteration) or weekend (second iteration)
                 if num_days == 0: continue
 
-                for hour in range(24):
-                    counts = []
-                    for d in unique_days[bucket]:
-                        counts.append(traffic_data[bucket][hour].get(d, 0))
+                for hour in range(24): # Loop through every single hour of the day
+                    counts = [] # Contains the total events for a specific hour of day and continues iterating for every hour
+                    for d in unique_days[bucket]: # Looks through all unique dates for a specific hour in that bucket and adds their # of events to count
+                        counts.append(traffic_data[bucket][hour].get(d, 0)) # Custom fallback value to keep the calculations moving if a time doesn't exist
 
                     mean = sum(counts) / num_days
                     variance = sum((x - mean) ** 2 for x in counts) / num_days
                     std_dev = math.sqrt(variance)
+					# Performing calculations for mean, variance, and standard deviation
 
                     am_pm = "AM" if hour < 12 else "PM"
                     display_h = hour if hour <= 12 else hour - 12
                     if display_h == 0: display_h = 12
                     hour_label = f"{display_h}:00 {am_pm}"
 
-                    baselines[bucket][hour_label] = {
+                    baselines[bucket][hour_label] = { # This is where we save the calculated data for the weekday/weekend and a specific hour
                         "mean_traffic": round(mean, 2),
                         "standard_deviation": round(std_dev, 2),
                         "anomaly_threshold_2SD": round(mean + (2 * std_dev), 2)
@@ -726,28 +731,29 @@ def update_statistical_baselines():
             # --Daily frequency for individuals--
             person_daily_counts = defaultdict(lambda: defaultdict(int)) # person -> date -> count
             for e in events:
-                date_str = e.timestamp.strftime("%Y-%m-%d")
-                name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
-                person_daily_counts[name][date_str] += 1
+                date_str = e.timestamp.strftime("%Y-%m-%d") # Pulls from timestamp column and only takes date (not time)
+                name = getattr(e, 'person_name', 'Unknown') or 'Unknown' # Uses get_attr method to extract the person's name from the person_name column
+                person_daily_counts[name][date_str] += 1 # For each event, add to dictionary (if their name/timestamp doesn't already exist) one detection
 
             individual_stats = {}
             total_days_in_window = 50
 
-            for name, date_counts in person_daily_counts.items():
-                days_seen = len(date_counts)
+            for name, date_counts in person_daily_counts.items(): # Iterates for however many people are in person_daily_counts
+                days_seen = len(date_counts) # Counts how many total dates of detection there are inside the inner date_counts dictionary for a specific person
                 days_unseen = total_days_in_window - days_seen
 
                 
-                counts_list = list(date_counts.values()) + [0] * days_unseen
+                counts_list = list(date_counts.values()) + [0] * days_unseen #Extracts all the values of the dates which is the inner dictionary (so the number of detections) then adds to a list 
+				# Need to add the number of unseen days as blank zeroes into the list to ensure we can use statistics library to effectively calculate mean and stdev of numerical values in a list
 
                 #Set grace period for newly registered users (3 days of data)
                 if days_seen < 3 and name != "Unknown":
                      continue
 
-                mean_val = statistics.mean(counts_list)
+                mean_val = statistics.mean(counts_list) # Statistics library to calculate mean, stdev of number of detections across 50 days
                 sd_val = statistics.pstdev(counts_list)
 
-                individual_stats[name] = {
+                individual_stats[name] = { # Add to dictionary based on the name of each user
                     "mean_daily_appearances": round(mean_val, 2),
                     "std_dev": round(sd_val, 2),
                     "anomaly_threshold_2SD": math.ceil(mean_val + (2 * sd_val))
