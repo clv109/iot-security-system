@@ -112,8 +112,12 @@ def establish_pseudonyms(name_list): # Parameter: identity_list, list containing
         input=name, capture_output=True, text=True # No need to echo, use input=name instead. Performs the same action as echo by piping elements of names into tpm2_hmac to be pseudonymized
 		)
 		if pseudonym.returncode == 0: # Ensure pseudonyms created without issue
-			mappings[name] = pseudonym.stdout.strip() # Create dictionary mapping with person's name as key, then name's pseudonym as value
-		else: 
+                        pseudonym_string = pseudonym.stdout.strip()
+                        mappings[name] = pseudonym_string # Create dictionary map with person's name as key, then name's pseudonym as value
+
+                        mappings[name.replace("_", " ")] = pseudonym_string # Add to dictionary with the clean name as a personal identifier as well
+			# Add to dictionary with clean name to simplify later functions during baseline calculations
+		else:
 			print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
 
 	return mappings
@@ -729,22 +733,22 @@ def update_statistical_baselines():
                     }
 
             # --Daily frequency for individuals--
-			# Daily frequency for invidiauls is now associated with pseudonyms, no longer with a personal identifier
+	    # Daily frequency for invidiauls is now associated with pseudonyms, no longer with a personal identifier
             person_daily_counts = defaultdict(lambda: defaultdict(int)) # person -> date -> count
-			for e in events:
+            for e in events:
                 date_str = e.timestamp.strftime("%Y-%m-%d") # Pulls from timestamp column and only takes date (not time)
                 personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown' # Uses get_attr method to extract the person's name from the person_name column
-				# Once a person's name is extracted from the SQLite database, we must map it to its pseudonym to be stored 
-				
-				if personal_name != "Unknown": 
-					clean_name = personal_name.replace("_", " ")
-					# If it's a plaintext name, this grabs the pseudonym string 
-					# If the name is already a pseudonym (i.e. anonymized mode was on) then .get() fails and it defaults to the personal_name that was already the pseudonym
-					pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
-				else:
-					pseudonymized_name = "Unknown"
+		# Once a person's name is extracted from the SQLite database, we must map it to its pseudonym to be stored 
 
-				# We now save the pseudonym as a key to the dictionary instead of the personal identifier
+                if personal_name != "Unknown":
+                    clean_name = personal_name.replace("_", " ")
+				# If it's a plaintext name, this grabs the pseudonym string 
+				# If the name is already a pseudonym (i.e. anonymized mode was on) then .get() fails and it defaults to the personal_name that was already the pseudonym
+                    pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+                else:
+                    pseudonymized_name = "Unknown"
+
+		# We now save the pseudonym as a key to the dictionary instead of the personal identifier
                 person_daily_counts[pseudonymized_name][date_str] += 1 # For each event, add to dictionary (if their pseudonym/timestamp doesn't already exist) one detection
 
             individual_stats = {}
@@ -754,7 +758,7 @@ def update_statistical_baselines():
                 days_seen = len(date_counts) # Counts how many total dates of detection there are inside the inner date_counts dictionary for a specific person
                 days_unseen = total_days_in_window - days_seen
 
-                
+
                 counts_list = list(date_counts.values()) + [0] * days_unseen #Extracts all the values of the dates which is the inner dictionary (so the number of detections) then adds to a list 
 				# Need to add the number of unseen days as blank zeroes into the list to ensure we can use statistics library to effectively calculate mean and stdev of numerical values in a list
 
@@ -772,19 +776,19 @@ def update_statistical_baselines():
                 }
 
             # --Typical visit durations--
-			# Typical visit durations for invidiauls is now associated with pseudonyms, no longer with a personal identifier
+	    # Typical visit durations for invidiauls is now associated with pseudonyms, no longer with a personal identifier
             person_durations = defaultdict(list)
             for e in events:
                 personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
                 dur = getattr(e, 'duration_seconds', 0.0)
 				# Once we extract a personal identifier and then their duration, we translate the name to a pseudonym to be stored
                 if dur > 0:  #Ignore rows with 0.0
-					if personal_name != "Unknown":
-						clean_name = personal_name.replace("_", " ")
-						# Similar pipeline to the daily frequency, we use .get() method to check personal_name and clean_name for its matching pseudonym
-						pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
-					else:
-						pseudonymized_name = "Unknown"
+                    if personal_name != "Unknown":
+                        clean_name = personal_name.replace("_", " ")
+			# Similar pipeline to the daily frequency, we use .get() method to check personal_name and clean_name for its matching pseudonym
+                        pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+                    else:
+                        pseudonymized_name = "Unknown"
 
                     person_durations[pseudonymized_name].append(dur)
 
@@ -1987,7 +1991,7 @@ if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true": # Prevents Fl
 
     # Machine learning and calculations each day
     # Runs every single night at 11:22 PM to learn from the previous day's traffic
-    scheduler.add_job(func=update_statistical_baselines, trigger="cron", hour=23, minute=22)
+    scheduler.add_job(func=update_statistical_baselines, trigger="cron", hour= 17, minute=44)
 
     # Data retention cleanup
     # Runs every day at 1:21 PM to clean up database

@@ -114,8 +114,11 @@ def establish_pseudonyms(name_list): # Parameter: identity_list, list containing
             )
         
             if pseudonym.returncode == 0: # Ensure pseudonyms created without issue
-                        mappings[name] = pseudonym.stdout.strip() # Create dictionary mapping with person's name as key, then name's pseudonym as value
-            else: 
+                        pseudonym_name  = pseudonym.stdout.strip() # Create dictionary mapping with person's name as key, then name's pseudonym as value
+                        mappings[name] = pseudonym_name # Key: personal identifier, value: the generated pseudonym
+                        mappings[name.replace("_", " ")] = pseudonym_name
+			# Add to dictionary with clean name with the underscore removed to simplify later functions during baseline calculations
+            else:
                     print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
 
     return mappings
