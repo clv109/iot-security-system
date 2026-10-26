@@ -729,11 +729,23 @@ def update_statistical_baselines():
                     }
 
             # --Daily frequency for individuals--
+			# Daily frequency for invidiauls is now associated with pseudonyms, no longer with a personal identifier
             person_daily_counts = defaultdict(lambda: defaultdict(int)) # person -> date -> count
-            for e in events:
+			for e in events:
                 date_str = e.timestamp.strftime("%Y-%m-%d") # Pulls from timestamp column and only takes date (not time)
-                name = getattr(e, 'person_name', 'Unknown') or 'Unknown' # Uses get_attr method to extract the person's name from the person_name column
-                person_daily_counts[name][date_str] += 1 # For each event, add to dictionary (if their name/timestamp doesn't already exist) one detection
+                personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown' # Uses get_attr method to extract the person's name from the person_name column
+				# Once a person's name is extracted from the SQLite database, we must map it to its pseudonym to be stored 
+				
+				if personal_name != "Unknown": 
+					clean_name = personal_name.replace("_", " ")
+					# If it's a plaintext name, this grabs the pseudonym string 
+					# If the name is already a pseudonym (i.e. anonymized mode was on) then .get() fails and it defaults to the personal_name that was already the pseudonym
+					pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+				else:
+					pseudonymized_name = "Unknown"
+
+				# We now save the pseudonym as a key to the dictionary instead of the personal identifier
+                person_daily_counts[pseudonymized_name][date_str] += 1 # For each event, add to dictionary (if their pseudonym/timestamp doesn't already exist) one detection
 
             individual_stats = {}
             total_days_in_window = 50
@@ -760,12 +772,21 @@ def update_statistical_baselines():
                 }
 
             # --Typical visit durations--
+			# Typical visit durations for invidiauls is now associated with pseudonyms, no longer with a personal identifier
             person_durations = defaultdict(list)
             for e in events:
-                name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
+                personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
                 dur = getattr(e, 'duration_seconds', 0.0)
+				# Once we extract a personal identifier and then their duration, we translate the name to a pseudonym to be stored
                 if dur > 0:  #Ignore rows with 0.0
-                    person_durations[name].append(dur)
+					if personal_name != "Unknown":
+						clean_name = personal_name.replace("_", " ")
+						# Similar pipeline to the daily frequency, we use .get() method to check personal_name and clean_name for its matching pseudonym
+						pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+					else:
+						pseudonymized_name = "Unknown"
+
+                    person_durations[pseudonymized_name].append(dur)
 
             duration_stats = {}
             for name, d_list in person_durations.items():
