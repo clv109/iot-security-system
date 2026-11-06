@@ -533,9 +533,10 @@ def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Num
 def send_individual_anomaly_alert(image_frame, person_name, current_count, threshold): # Individualized anomaly email
 	# Add pseudonym pipeline to send pseudonyms during anonymized mode
 	if is_anonymized_mode():
-		db_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, "Unknown")
+		clean_name = person_name.replace('_', ' ')
+		person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
 	
-    # log_event(f"BEHAVIORAL ANOMALY: {person_name} ({current_count} visits) exceeds daily limit of {threshold}", priority="ALERT")
+    log_event(f"BEHAVIORAL ANOMALY: {person_name} ({current_count} visits) exceeds daily limit of {threshold}", priority="ALERT")
     
     try:
         _, encoded = cv2.imencode(".jpg", image_frame)
@@ -575,6 +576,11 @@ def send_individual_anomaly_alert(image_frame, person_name, current_count, thres
 
 
 def send_duration_anomaly_alert(image_frame, person_name, duration, threshold): # Individualized duration exceeds normal threshold
+    # anonymized mode has us send emails in pseudonyms
+	if is_anonymized_mode():
+		clean_name = person_name.replace('_', ' ')
+		person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
+	
     log_event(f"DURATION ANOMALY: {person_name} ({duration:.1f}s) exceeded limit of {threshold}s", priority="ALERT")
     
     try:
