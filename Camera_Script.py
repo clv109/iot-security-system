@@ -841,10 +841,14 @@ while True:
                 
                 daily_user_counts[clean_name] = daily_user_counts.get(clean_name, 0) + 1
                 if baselines_data and clean_name not in daily_anomaly_alerts_sent:
-                    indiv_stats = baselines_data.get("individual_daily_frequency", {})
+                    indiv_stats = baselines_data.get("individual_daily_frequency", {}) # Extract typical frequency for individuals from baselines.json
+
+					pseudonym_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, clean_name)
                     
-                    if name in indiv_stats:
-                        threshold = indiv_stats[name].get("anomaly_threshold_2SD", 9999)
+                    if pseudonym_name in indiv_stats: # Check for pseudonyms since that is the label on our baseline calculations now
+                        threshold = indiv_stats[pseudonym_name].get("anomaly_threshold_2SD", 9999)
+					elif name in indiv_stats:
+						threshold = indiv_stats[name].get("anomaly_threshold_2SD", 9999
                     elif clean_name in indiv_stats:
                         threshold = indiv_stats[clean_name].get("anomaly_threshold_2SD", 9999)
                     elif clean_name == "Unknown":
@@ -861,11 +865,15 @@ while True:
             current_duration = now_time - active_visits[clean_name]['start']
             
             if baselines_data and not active_visits[clean_name]['alert_sent']:
-                dur_stats = baselines_data.get("typical_visit_durations", {})
+                dur_stats = baselines_data.get("typical_visit_durations", {}) # Extract the baselines for typical durations
                 raw_name = active_visits[clean_name]['raw_name']
+
+				pseudonym_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, clean_name)
                 
-                if raw_name in dur_stats:
-                    threshold = dur_stats[raw_name].get("anomaly_max_duration", 9999)
+                if pseudonym_name in dur_stats: #Baselines are in pseudonyms now so we must check it first
+                    threshold = dur_stats[pseudonym_name].get("anomaly_max_duration", 9999)
+				elif raw_name in dur_stats: 
+					threshold = dur_stats[raw_name].get("anomaly_max_duration", 9999)
                 elif clean_name in dur_stats:
                     threshold = dur_stats[clean_name].get("anomaly_max_duration", 9999)
                 else:
