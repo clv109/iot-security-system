@@ -835,7 +835,7 @@ while True:
                     hour_stats = baselines_data.get("statistical_baselines", {}).get(bucket, {}).get(hour_label)
                     if hour_stats:
                         threshold = hour_stats.get("anomaly_threshold_2SD", 9999)
-                        if hourly_event_count > threshold:
+                        if hourly_event_count > threshold: #send anomaly email if there is more total events than normal
                             send_anomaly_alert(frame, hourly_event_count, threshold, hour_label)
                             anomaly_alert_sent_this_hour = True
                 
@@ -852,7 +852,7 @@ while True:
                     else:
                         threshold = getattr(config, 'NEW_USER_GRACE_THRESHOLD', 5)
                         
-                    if daily_user_counts[clean_name] > threshold:
+                    if daily_user_counts[clean_name] > threshold: #if user counts exceed their stdev threshold, then we send a personalized anomaly alert
                         send_individual_anomaly_alert(frame, clean_name, daily_user_counts[clean_name], threshold)
                         daily_anomaly_alerts_sent.add(clean_name)
             else:
