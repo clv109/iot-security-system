@@ -489,7 +489,8 @@ def send_email_alert(image_frame, duration): # Unauthorized person and quiet hou
         log_event(f"EMAIL FAILED: {e}", priority="ALERT")
         log_alert_to_db("Email", RECEIVER_EMAIL, event_type_log, "Failed")
 
-def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Number of events detected exceeding typical threshold email
+def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Number of events detected exceeding typical threshold email 
+	
     log_event(f"STATISTICAL ANOMALY: {current_count} events exceeds normal threshold of {threshold}", priority="ALERT")
     
     try:
@@ -530,7 +531,11 @@ def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Num
 
 
 def send_individual_anomaly_alert(image_frame, person_name, current_count, threshold): # Individualized anomaly email
-    log_event(f"BEHAVIORAL ANOMALY: {person_name} ({current_count} visits) exceeds daily limit of {threshold}", priority="ALERT")
+	# Add pseudonym pipeline to send pseudonyms during anonymized mode
+	if is_anonymized_mode():
+		db_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, "Unknown")
+	
+    # log_event(f"BEHAVIORAL ANOMALY: {person_name} ({current_count} visits) exceeds daily limit of {threshold}", priority="ALERT")
     
     try:
         _, encoded = cv2.imencode(".jpg", image_frame)
