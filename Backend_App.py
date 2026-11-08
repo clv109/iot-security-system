@@ -1,11 +1,13 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, Response # <--- ADDED Response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
-import subprocess #subprocess imported to run commands on Raspberry Pi terminal via this python file
+# subprocess imported to run commands on Raspberry Pi terminal via this
+# python file
+import subprocess
 import os
 import signal
 import sys
@@ -39,106 +41,128 @@ from flask_wtf.csrf import CSRFProtect
 
 def get_flask_csrf_key():
     """Unseals the CSRF key from the TPM2.0 hardware"""
-    #Load CSRF key into volatile RAM on TPM
+    # Load CSRF key into volatile RAM on TPM
     loadingCSRF = subprocess.run(
-		["tpm2_load", "-C","0x81010001", "-u","HMACcsrf.pub", "-r","HMACcsrf.priv", "-c","HMACcsrf.ctx"],
-		capture_output=True, text=True #Load CSRF key priv/pub file into TPM
+		["tpm2_load", "-C", "0x81010001", "-u", "HMACcsrf.pub",
+		    "-r", "HMACcsrf.priv", "-c", "HMACcsrf.ctx"],
+		capture_output=True, text=True  # Load CSRF key priv/pub file into TPM
     )
     # Check if the load command failed
-    if loadingCSRF.returncode != 0: #.returncode is attribute of subprocess library, value of 0 means sucess, != 0 indicates error
+    if loadingCSRF.returncode != 0:  # .returncode is attribute of subprocess library, value of 0 means sucess, != 0 indicates error
         print(f"[ERROR] Failed to load CSRF key: {loadingCSRF.stderr}")
         return None
 
     # Unseal the key
     CSRF_key = subprocess.run(
-		["tpm2_unseal", "-c","HMACcsrf.ctx"], #Unseal CSRF key
+		["tpm2_unseal", "-c", "HMACcsrf.ctx"],  # Unseal CSRF key
 		capture_output=True, text=True
     )
     # Verify success and extract the text
-    if CSRF_key.returncode == 0: #suprocess .returncode == 0 indicate no errors occurred
+    if CSRF_key.returncode == 0:  # suprocess .returncode == 0 indicate no errors occurred
         # Extract the string and strip hidden whitespace
-        CSRF_key_string = CSRF_key.stdout.strip() #key is in plaintext under stdout and we strip() to remove the \n at the end
+        # key is in plaintext under stdout and we strip() to remove the \n at
+        # the end
+        CSRF_key_string = CSRF_key.stdout.strip()
         return CSRF_key_string
 
     print("[WARNING] CSRF key not found in vault! System security potentially compromised.")
     return None
 
-def extract_identifiers(): 
+
+def extract_identifiers():
     """Unseal the personal identifiers from the TPM2.0 hardware"""
     identity_list = []
 
     # Load identifiers into TPM
     loading_identifiers = subprocess.run(
-        ["tpm2_load", "-C","0x81010001", "-u","identifiers.pub", "-r","identifiers.priv", "-c","identifiers.ctx"],
+        ["tpm2_load", "-C", "0x81010001", "-u", "identifiers.pub",
+            "-r", "identifiers.priv", "-c", "identifiers.ctx"],
         capture_output=True, text=True
     )
 
-    #Ensure loading has occured without issue
+    # Ensure loading has occured without issue
     if loading_identifiers.returncode != 0:
-        print(f"[ERROR] Failed to load identifiers: {loading_identifiers.stderr}")
+        print(
+            f"[ERROR] Failed to load identifiers: {loading_identifiers.stderr}")
         return None
 
     # Unseal identifiers
     identity = subprocess.run(
-        ["tpm2_unseal", "-c","identifiers.ctx"],
+        ["tpm2_unseal", "-c", "identifiers.ctx"],
         capture_output=True, text=True
     )
 
-    if identity.returncode == 0: #Ensure identifiers properly extracted
+    if identity.returncode == 0:  # Ensure identifiers properly extracted
         for line in identity.stdout.split('\n'):
-            cleaned_name = line.strip() 
+            cleaned_name = line.strip()
             if cleaned_name:
-                identity_list.append(cleaned_name) # Add identifiers to returned list
+                # Add identifiers to returned list
+                identity_list.append(cleaned_name)
 
     return identity_list
 
-def establish_pseudonyms(name_list): # Parameter: identity_list, list containing personal identifiers to be pseudoynmized
-	mappings = {} # establish dictionary for simple key:value pair to relate pseudoynms to personal identifiers
+
+# Parameter: identity_list, list containing personal identifiers to be
+# pseudoynmized
+def establish_pseudonyms(name_list):
+	mappings = {}  # establish dictionary for simple key:value pair to relate pseudoynms to personal identifiers
 
 	# Load the TPM's HMAC key into the TPM 2.0 hardware
 	load_hmac = subprocess.run(
-        ["tpm2_load", "-C","0x81010001", "-u","TPMhmac.pub", "-r","TPMhmac.priv", "-c","TPMhmac.ctx"],
+        ["tpm2_load", "-C", "0x81010001", "-u", "TPMhmac.pub",
+            "-r", "TPMhmac.priv", "-c", "TPMhmac.ctx"],
         capture_output=True, text=True
     )
 
-	#Ensure loading has occured without issue
+	# Ensure loading has occured without issue
 	if load_hmac.returncode != 0:
         	print(f"[ERROR] Failed to load TPM HMAC key: {load_hmac.stderr}")
         	return None
 
-	for name in name_list: # Loop through all of the identifiers 
+	for name in name_list:  # Loop through all of the identifiers
 		pseudonym = subprocess.run(
-        ["tpm2_hmac", "-c","TPMhmac.ctx", "--hex"],
-        input=name, capture_output=True, text=True # No need to echo, use input=name instead. Performs the same action as echo by piping elements of names into tpm2_hmac to be pseudonymized
+        ["tpm2_hmac", "-c", "TPMhmac.ctx", "--hex"],
+        # No need to echo, use input=name instead. Performs the same action as
+        # echo by piping elements of names into tpm2_hmac to be pseudonymized
+        input=name, capture_output=True, text=True
 		)
-		if pseudonym.returncode == 0: # Ensure pseudonyms created without issue
+		if pseudonym.returncode == 0:  # Ensure pseudonyms created without issue
                         pseudonym_string = pseudonym.stdout.strip()
-                        mappings[name] = pseudonym_string # Create dictionary map with person's name as key, then name's pseudonym as value
+                        # Create dictionary map with person's name as key, then
+                        # name's pseudonym as value
+                        mappings[name] = pseudonym_string
 
-                        mappings[name.replace("_", " ")] = pseudonym_string # Add to dictionary with the clean name as a personal identifier as well
-			# Add to dictionary with clean name to simplify later functions during baseline calculations
+                        # Add to dictionary with the clean name as a personal
+                        # identifier as well
+                        mappings[name.replace("_", " ")] = pseudonym_string
+			# Add to dictionary with clean name to simplify later functions during
+			# baseline calculations
 		else:
 			print(f"[ERROR] Pseudonym generation failed for {name}: {pseudonym.stderr}")
 
 	return mappings
 
+
 # Load environment variables (containing secrets/passwords)
 load_dotenv("secretcredentials.env")
 
-# Load personal identifiers from TPM (we run it here as global variable to ensure it runs only once)
+# Load personal identifiers from TPM (we run it here as global variable to
+# ensure it runs only once)
 Authorized_names_ram = extract_identifiers() or []
 
-# Generate pseudonyms for personal identiifers from TPM (we run it here as global variable to ensure it runs only once)
+# Generate pseudonyms for personal identiifers from TPM (we run it here as
+# global variable to ensure it runs only once)
 Names_pseudonyms = establish_pseudonyms(Authorized_names_ram) or {}
 
-###CURRENTLY A TEST, REMOVE WHEN FULL SYSTEM IS WORKING
+# CURRENTLY A TEST, REMOVE WHEN FULL SYSTEM IS WORKING
 print(Names_pseudonyms)
 ###
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = get_flask_csrf_key() # Assign SECRET_KEY to the unsealed key from the TPM
+# Assign SECRET_KEY to the unsealed key from the TPM
+app.config['SECRET_KEY'] = get_flask_csrf_key()
 
-if not app.config["SECRET_KEY"]: # Check to ensure CSRF key loaded properly
+if not app.config["SECRET_KEY"]:  # Check to ensure CSRF key loaded properly
     print("[FATAL ERROR] TPM failed to unseal Flask CSRF key. Shutting down server to prevent vulnerabilities from being exploited.")
     sys.exit(1)
 
@@ -152,7 +176,8 @@ csrf = CSRFProtect(app)
 # Initialize security tools
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login' # Kicks unauthenticated users to the login page
+# Kicks unauthenticated users to the login page
+login_manager.login_view = 'login'
 
 # Establish SQLite database path
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -180,12 +205,14 @@ if not os.path.exists(DATASET_DIR):
 
 # --Defining Database Tables--
 
+
 class DetectionEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
     status = db.Column(db.String(50), nullable=False)
     image_path = db.Column(db.String(200))
-    person_name = db.Column(db.String(100), default="Unknown") # Tracks excatly who was seen
+    # Tracks excatly who was seen
+    person_name = db.Column(db.String(100), default="Unknown")
     duration_seconds = db.Column(db.Float, default=0.0)
 
     def to_dict(self):
@@ -194,9 +221,10 @@ class DetectionEvent(db.Model):
             'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'status': self.status,
             'image_path': self.image_path,
-            'person_name': self.person_name, 
-            'duration_seconds': self.duration_seconds 
+            'person_name': self.person_name,
+            'duration_seconds': self.duration_seconds
         }
+
 
 class AlertLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -216,6 +244,7 @@ class AlertLog(db.Model):
             'status': self.status
         }
 
+
 class AuthorizedUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -231,6 +260,7 @@ class AuthorizedUser(db.Model):
             'image_count': self.image_count,
             'notes': self.notes
         }
+
 
 class SystemLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -253,6 +283,8 @@ class SystemLog(db.Model):
         }
 
 # Audit Log Table to record sensitive actions
+
+
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
@@ -260,7 +292,7 @@ class AuditLog(db.Model):
     action = db.Column(db.String(100), nullable=False)
     details = db.Column(db.String(255))
 
-    def to_dict(self): 
+    def to_dict(self):
         return {
             'id': self.id,
             'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
@@ -274,10 +306,10 @@ class AuditLog(db.Model):
 class SystemReport(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
-    coverage_date = db.Column(db.Date, nullable=False)       
-    report_type = db.Column(db.String(50), nullable=False)  
-    content = db.Column(db.Text, nullable=False)             
-    emailed_status = db.Column(db.Boolean, default=False)    
+    coverage_date = db.Column(db.Date, nullable=False)
+    report_type = db.Column(db.String(50), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    emailed_status = db.Column(db.Boolean, default=False)
 
     def to_dict(self):
         return {
@@ -285,16 +317,20 @@ class SystemReport(db.Model):
             'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'coverage_date': self.coverage_date.strftime('%Y-%m-%d'),
             'report_type': self.report_type,
-            'content': json.loads(self.content), 
+            'content': json.loads(self.content),
             'emailed_status': self.emailed_status
         }
 
 # User authentication table
-class User(db.Model, UserMixin): 
+
+
+class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False) #hashed to ensure password is encrypted
-    role = db.Column(db.String(20), default="Viewer", nullable=False) # Two roles: either "Admin" or "viewer"
+    # hashed to ensure password is encrypted
+    password_hash = db.Column(db.String(255), nullable=False)
+    # Two roles: either "Admin" or "viewer"
+    role = db.Column(db.String(20), default="Viewer", nullable=False)
 
     def to_dict(self):
         return {
@@ -311,12 +347,14 @@ def admin_required(f):
         if not current_user.is_authenticated:
             return redirect(url_for('login'))
 
-
         if current_user.role != "Admin":
-            log_system_event("WARNING", "Access Denied", f"Viewer '{current_user.username}' attempted to use an Admin control.")
+            log_system_event(
+    "WARNING",
+    "Access Denied",
+     f"Viewer '{current_user.username}' attempted to use an Admin control.")
             abort(403)
 
-        #If user is logged in and is Admin, then they pass
+        # If user is logged in and is Admin, then they pass
         return f(*args, **kwargs)
     return decorated_function
 
@@ -326,6 +364,8 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # Helper function to log system events
+
+
 def log_system_event(level, event_type, message, details=None):
     try:
         log_entry = SystemLog(
@@ -340,11 +380,13 @@ def log_system_event(level, event_type, message, details=None):
     except Exception as e:
         print(f"Failed to write system log: {e}")
 
-# Helper function for SQLite database audit logging 
+# Helper function for SQLite database audit logging
+
+
 def log_user_action(action, details=None):
     '''Records what a human user did in the dashboard.'''
     try:
-        
+
         user_name = current_user.username if current_user.is_authenticated else "System"
 
         audit_entry = AuditLog(
@@ -358,6 +400,7 @@ def log_user_action(action, details=None):
         print(f"Failed to write audit log: {e}")
 
 # --ROUTES--
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -374,35 +417,52 @@ def login():
 
         # Run the inputted password through the math and compare to DB hash
         if user and bcrypt.check_password_hash(user.password_hash, password):
-            login_user(user) #built in function on Flask-login that authenticates a user and recognizes them
-            log_system_event("INFO", "Login", f"User '{username}' authenticated successfully.")
-            log_user_action("Login", "User logged into the dashboard.") 
+            # built in function on Flask-login that authenticates a user and
+            # recognizes them
+            login_user(user)
+            log_system_event(
+    "INFO",
+    "Login",
+     f"User '{username}' authenticated successfully.")
+            log_user_action("Login", "User logged into the dashboard.")
             return redirect(url_for('dashboard'))
         else:
-            log_system_event("WARNING", "Failed Login", f"Failed attempt for username '{username}'.")
+            log_system_event(
+    "WARNING",
+    "Failed Login",
+     f"Failed attempt for username '{username}'.")
 
             # Log IP to flask_auth.log for fail2ban purposes
             client_ip = request.remote_addr
             with open("flask_auth.log", "a") as f:
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"{now_str} [Auth Failure] IP: {client_ip} tried to log in as '{username}'\n")
+                f.write(
+                    f"{now_str} [Auth Failure] IP: {client_ip} tried to log in as '{username}'\n")
 
-            return render_template('Login_Page.html', error="Invalid username or password")
+            return render_template(
+    'Login_Page.html',
+     error="Invalid username or password")
 
     return render_template('Login_Page.html')
+
 
 @app.route('/logout')
 @login_required
 def logout():
-    log_system_event("INFO", "Logout", f"User '{current_user.username}' logged out.")
-    log_user_action("Logout", "User logged out of the dashboard.") 
+    log_system_event(
+    "INFO",
+    "Logout",
+     f"User '{current_user.username}' logged out.")
+    log_user_action("Logout", "User logged out of the dashboard.")
     logout_user()
     return redirect(url_for('login'))
+
 
 @app.route('/')
 @login_required
 def dashboard():
     return render_template('Best_Dashboard.html')
+
 
 @app.route('/livecam')
 @login_required
@@ -411,14 +471,22 @@ def camera_feed():
     return render_template('Live_Cam_Feed.html', pi_ip=pi_ip)
 
 # Secure video stream
+
+
 @app.route('/video_stream')
 @login_required
 def video_stream():
     """Proxies the unencrypted local camera stream through Flask's secure HTTPS connection"""
     try:
-        # Grab the local stream from the camera script 
-        req = requests.get('http://127.0.0.1:5001/stream.mjpg', stream=True, timeout=5)
-        return Response(req.iter_content(chunk_size=1024), mimetype=req.headers.get('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME'))
+        # Grab the local stream from the camera script
+        req = requests.get(
+    'http://127.0.0.1:5001/stream.mjpg',
+    stream=True,
+     timeout=5)
+        return Response(
+    req.iter_content(
+        chunk_size=1024), mimetype=req.headers.get(
+            'Content-Type', 'multipart/x-mixed-replace; boundary=FRAME'))
     except Exception as e:
         print(f"[ERROR] Proxy stream failed: {e}")
         abort(502)
@@ -435,27 +503,34 @@ def trigger_alert_bridge():
         return jsonify(status="error", message=str(e)), 500
 
 # Fetch audit logs (restricted to admin only access)
+
+
 @app.route('/api/audit_logs')
 @login_required
-@admin_required 
+@admin_required
 def get_audit_logs():
     """Fetches the human audit trail for the dashboard."""
-    
-    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(100).all()
-    
-    return jsonify([log.to_dict() for log in logs])
 
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(100).all()
+
+    return jsonify([log.to_dict() for log in logs])
 
 
 def kill_process_by_name(name):
     try:
         if IS_WINDOWS:
             cmd = f"wmic process where \"name='python.exe' and commandline like '%{name}%'\" call terminate"
-            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+    cmd,
+    shell=True,
+    stdout=subprocess.DEVNULL,
+     stderr=subprocess.DEVNULL)
         else:
-            subprocess.run(["pkill", "-9", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["pkill", "-9", "-f", name],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         print(f"Error during cleanup: {e}")
+
 
 def is_running():
     if not os.path.exists(PID_FILE):
@@ -464,7 +539,8 @@ def is_running():
         with open(PID_FILE, "r") as f:
             pid = int(f.read().strip())
         if IS_WINDOWS:
-            output = subprocess.check_output(f"tasklist /fi \"PID eq {pid}\"", shell=True).decode()
+            output = subprocess.check_output(
+    f"tasklist /fi \"PID eq {pid}\"", shell=True).decode()
             return str(pid) in output
         else:
             os.kill(pid, 0)
@@ -472,12 +548,14 @@ def is_running():
     except (OSError, ValueError, subprocess.CalledProcessError):
         return False
 
+
 def get_fernet_encryption_key():
     """Unseals the master Fernet key from the TPM2.0 hardware"""
-    #Load key into volatile RAM on TPM
+    # Load key into volatile RAM on TPM
     loadingFernet = subprocess.run(
-	["tpm2_load", "-C","0x81010001", "-u","Fernetkey.pub", "-r","Fernetkey.priv", "-c","Fernetkey.ctx"],
-	capture_output=True, text=True #Load Fernet key priv/pub file into TPM
+	["tpm2_load", "-C", "0x81010001", "-u", "Fernetkey.pub",
+	    "-r", "Fernetkey.priv", "-c", "Fernetkey.ctx"],
+	capture_output=True, text=True  # Load Fernet key priv/pub file into TPM
 )
     # Check if the load command failed
     if loadingFernet.returncode != 0:
@@ -486,19 +564,20 @@ def get_fernet_encryption_key():
 
     # Unseal the key
     Fernet_key = subprocess.run(
-	["tpm2_unseal", "-c","Fernetkey.ctx"], #Unseal Fernet key
+	["tpm2_unseal", "-c", "Fernetkey.ctx"],  # Unseal Fernet key
 	capture_output=True, text=True
 )
     # Verify success and extract the text
     if Fernet_key.returncode == 0:
         # Extract the string and strip hidden whitespace
-        fernet_key_string = Fernet_key.stdout.strip() 
+        fernet_key_string = Fernet_key.stdout.strip()
         return fernet_key_string
 
     print("[WARNING] BIOMETRIC_KEY not found in vault! Biometrics will not be encrypted.")
     return None
 
 # --System Control Routes--
+
 
 @app.route('/system_status')
 @login_required
@@ -512,6 +591,7 @@ def system_status():
             except:
                 pass
         return jsonify(status="stopped")
+
 
 @app.route('/start_system', methods=['POST'])
 @login_required
@@ -549,15 +629,26 @@ def start_system():
         with open(PID_FILE, "w") as f:
             f.write(str(proc.pid))
 
-        log_system_event("INFO", "Startup", "Camera process started manually", f"PID: {proc.pid}")
-        log_user_action("Armed System", "Manually started the camera feed via dashboard.") 
+        log_system_event(
+    "INFO",
+    "Startup",
+    "Camera process started manually",
+     f"PID: {proc.pid}")
+        log_user_action(
+    "Armed System",
+     "Manually started the camera feed via dashboard.")
 
-        socketio.emit('security_event', {'message': log_msg, 'priority': 'INFO'})
+        socketio.emit(
+    'security_event', {
+        'message': log_msg, 'priority': 'INFO'})
 
-        return jsonify(status="success", message=f"Security System Started at {now}")
+        return jsonify(
+    status="success",
+     message=f"Security System Started at {now}")
     except Exception as e:
         log_system_event("ERROR", "Startup Failed", str(e))
         return jsonify(status="error", message=str(e))
+
 
 @app.route('/stop_system', methods=['POST'])
 @login_required
@@ -588,9 +679,13 @@ def stop_system():
             f.write(log_msg + "\n")
 
         log_system_event("INFO", "Shutdown", "Camera process stopped manually")
-        log_user_action("Disarmed System", "Manually stopped the camera feed via dashboard.") 
+        log_user_action(
+    "Disarmed System",
+     "Manually stopped the camera feed via dashboard.")
 
-        socketio.emit('security_event', {'message': log_msg, 'priority': 'INFO'})
+        socketio.emit(
+    'security_event', {
+        'message': log_msg, 'priority': 'INFO'})
 
         return jsonify(status="success", message=f"Stopped at {now}")
     except Exception as e:
@@ -598,6 +693,7 @@ def stop_system():
         return jsonify(status="error", message=f"Error stopping: {str(e)}")
 
 # --Logging Routes--
+
 
 @app.route('/get_security_logs')
 @login_required
@@ -611,6 +707,7 @@ def get_security_logs():
     except Exception as e:
         return jsonify(logs=[f"Error reading logs: {str(e)}"], total_lines=0)
 
+
 @app.route('/get_full_logs')
 @login_required
 def get_full_logs():
@@ -623,6 +720,7 @@ def get_full_logs():
     except Exception as e:
         return jsonify(logs=[f"Error reading history: {str(e)}"])
 
+
 @app.route('/clear_logs', methods=['POST'])
 @login_required
 @admin_required
@@ -630,21 +728,27 @@ def clear_logs():
     try:
         with open(LOG_FILE, "w") as f:
             f.write(f"--- LOG CLEARED MANUALLY ---\n")
-        log_user_action("Cleared System Logs", "Wiped the main system history file.") 
+        log_user_action(
+    "Cleared System Logs",
+     "Wiped the main system history file.")
         return jsonify(status="success", message="Logs cleared.")
     except Exception as e:
         return jsonify(status="error", message=str(e))
 
 # --Detection analytics API--
+
+
 @app.route('/api/stats/detections')
 @login_required
 def get_detection_stats():
     try:
         start_date = datetime(2026, 3, 12)
-        events = DetectionEvent.query.filter(DetectionEvent.timestamp >= start_date).order_by(DetectionEvent.timestamp.asc()).all()
+        events = DetectionEvent.query.filter(
+    DetectionEvent.timestamp >= start_date).order_by(
+        DetectionEvent.timestamp.asc()).all()
 
         from collections import defaultdict
-		# Use defaultdict to effectively make nested dictionaries 
+		# Use defaultdict to effectively make nested dictionaries
 
         stats = defaultdict(lambda: {'auth': 0, 'unauth': 0})
 
@@ -671,24 +775,27 @@ def get_detection_stats():
 
 # --Statistical anomoly baselines--
 
+
 def update_statistical_baselines():
     """Calculates Mean and Standard Deviation and saves it to a JSON file for the camera to use."""
     with app.app_context():
         try:
             print("[REPORT ENGINE] Recalculating statistical traffic baselines...")
             from collections import defaultdict
-			# Use defaultdict to effectively make nested dictionaries 
+			# Use defaultdict to effectively make nested dictionaries
 
             cutoff_date = datetime.now() - timedelta(days=50)
 
-            events = DetectionEvent.query.filter(DetectionEvent.timestamp >= cutoff_date).all()
+            events = DetectionEvent.query.filter(
+    DetectionEvent.timestamp >= cutoff_date).all()
             if not events:
                 return {"status": "error", "message": "Not enough data."}
 
             traffic_data = {
                 "Weekday": defaultdict(lambda: defaultdict(int)),
                 "Weekend": defaultdict(lambda: defaultdict(int))
-				# Set up the nested dictionary: defaultdict with lambda as the hour, int as the date
+				# Set up the nested dictionary: defaultdict with lambda as the hour, int
+				# as the date
             }
             unique_days = {"Weekday": set(), "Weekend": set()}
 			# Use set() to ensure we don't have duplicate dates added
@@ -699,22 +806,35 @@ def update_statistical_baselines():
                 hour = dt.hour
 
                 bucket = "Weekend" if dt.weekday() >= 5 else "Weekday"
-                traffic_data[bucket][hour][date_key] += 1  #Checks back to the nested dictionary (and adds the hour/date if not there), adding 1 for one event at a certain timestamp
-                unique_days[bucket].add(date_key) #Add dates to unique_days dictionary so we can count up the total # of weekdays/weekends we have data for
+                # Checks back to the nested dictionary (and adds the hour/date
+                # if not there), adding 1 for one event at a certain timestamp
+                traffic_data[bucket][hour][date_key] += 1
+                # Add dates to unique_days dictionary so we can count up the
+                # total # of weekdays/weekends we have data for
+                unique_days[bucket].add(date_key)
 
             num_weekdays = len(unique_days["Weekday"])
             num_weekends = len(unique_days["Weekend"])
 
             baselines = {"Weekday": {}, "Weekend": {}}
 
-            for bucket in ["Weekday", "Weekend"]: # Two iterations: first calculataes for weekdays, then weekends
-                num_days = len(unique_days[bucket]) # Total of number of days for weekday (first iteration) or weekend (second iteration)
+            for bucket in [
+    "Weekday",
+     "Weekend"]:  # Two iterations: first calculataes for weekdays, then weekends
+                # Total of number of days for weekday (first iteration) or
+                # weekend (second iteration)
+                num_days = len(unique_days[bucket])
                 if num_days == 0: continue
 
-                for hour in range(24): # Loop through every single hour of the day
-                    counts = [] # Contains the total events for a specific hour of day and continues iterating for every hour
-                    for d in unique_days[bucket]: # Looks through all unique dates for a specific hour in that bucket and adds their # of events to count
-                        counts.append(traffic_data[bucket][hour].get(d, 0)) # Custom fallback value to keep the calculations moving if a time doesn't exist
+                for hour in range(
+                    24):  # Loop through every single hour of the day
+                    counts = []  # Contains the total events for a specific hour of day and continues iterating for every hour
+                    # Looks through all unique dates for a specific hour in
+                    # that bucket and adds their # of events to count
+                    for d in unique_days[bucket]:
+                        # Custom fallback value to keep the calculations moving
+                        # if a time doesn't exist
+                        counts.append(traffic_data[bucket][hour].get(d, 0))
 
                     mean = sum(counts) / num_days
                     variance = sum((x - mean) ** 2 for x in counts) / num_days
@@ -726,67 +846,93 @@ def update_statistical_baselines():
                     if display_h == 0: display_h = 12
                     hour_label = f"{display_h}:00 {am_pm}"
 
-                    baselines[bucket][hour_label] = { # This is where we save the calculated data for the weekday/weekend and a specific hour
+                    baselines[bucket][hour_label] = {  # This is where we save the calculated data for the weekday/weekend and a specific hour
                         "mean_traffic": round(mean, 2),
                         "standard_deviation": round(std_dev, 2),
                         "anomaly_threshold_2SD": round(mean + (2 * std_dev), 2)
                     }
 
             # --Daily frequency for individuals--
-	    # Daily frequency for invidiauls is now associated with pseudonyms, no longer with a personal identifier
-            person_daily_counts = defaultdict(lambda: defaultdict(int)) # person -> date -> count
+	    # Daily frequency for invidiauls is now associated with pseudonyms, no
+	    # longer with a personal identifier
+            person_daily_counts = defaultdict(
+    lambda: defaultdict(int))  # person -> date -> count
             for e in events:
-                date_str = e.timestamp.strftime("%Y-%m-%d") # Pulls from timestamp column and only takes date (not time)
-                personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown' # Uses get_attr method to extract the person's name from the person_name column
-		# Once a person's name is extracted from the SQLite database, we must map it to its pseudonym to be stored 
+                # Pulls from timestamp column and only takes date (not time)
+                date_str = e.timestamp.strftime("%Y-%m-%d")
+                # Uses get_attr method to extract the person's name from the
+                # person_name column
+                personal_name = getattr(
+    e, 'person_name', 'Unknown') or 'Unknown'
+		# Once a person's name is extracted from the SQLite database, we must map
+		# it to its pseudonym to be stored
 
                 if personal_name != "Unknown":
                     clean_name = personal_name.replace("_", " ")
-				# If it's a plaintext name, this grabs the pseudonym string 
-				# If the name is already a pseudonym (i.e. anonymized mode was on) then .get() fails and it defaults to the personal_name that was already the pseudonym
-                    pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+				# If it's a plaintext name, this grabs the pseudonym string
+				# If the name is already a pseudonym (i.e. anonymized mode was on) then
+				# .get() fails and it defaults to the personal_name that was already the
+				# pseudonym
+                    pseudonymized_name = Names_pseudonyms.get(
+                        personal_name) or Names_pseudonyms.get(clean_name, personal_name)
                 else:
                     pseudonymized_name = "Unknown"
 
-		# We now save the pseudonym as a key to the dictionary instead of the personal identifier
-                person_daily_counts[pseudonymized_name][date_str] += 1 # For each event, add to dictionary (if their pseudonym/timestamp doesn't already exist) one detection
+		# We now save the pseudonym as a key to the dictionary instead of the
+		# personal identifier
+                # For each event, add to dictionary (if their
+                # pseudonym/timestamp doesn't already exist) one detection
+                person_daily_counts[pseudonymized_name][date_str] += 1
 
             individual_stats = {}
             total_days_in_window = 50
 
-            for name, date_counts in person_daily_counts.items(): # Iterates for however many people are in person_daily_counts
-                days_seen = len(date_counts) # Counts how many total dates of detection there are inside the inner date_counts dictionary for a specific person
+            for name, date_counts in person_daily_counts.items(
+            ):  # Iterates for however many people are in person_daily_counts
+                # Counts how many total dates of detection there are inside the
+                # inner date_counts dictionary for a specific person
+                days_seen = len(date_counts)
                 days_unseen = total_days_in_window - days_seen
 
+                # Extracts all the values of the dates which is the inner
+                # dictionary (so the number of detections) then adds to a list
+                counts_list = list(date_counts.values()) + [0] * days_unseen
+				# Need to add the number of unseen days as blank zeroes into the list to
+				# ensure we can use statistics library to effectively calculate mean and
+				# stdev of numerical values in a list
 
-                counts_list = list(date_counts.values()) + [0] * days_unseen #Extracts all the values of the dates which is the inner dictionary (so the number of detections) then adds to a list 
-				# Need to add the number of unseen days as blank zeroes into the list to ensure we can use statistics library to effectively calculate mean and stdev of numerical values in a list
-
-                #Set grace period for newly registered users (3 days of data)
+                # Set grace period for newly registered users (3 days of data)
                 if days_seen < 3 and name != "Unknown":
                      continue
 
-                mean_val = statistics.mean(counts_list) # Statistics library to calculate mean, stdev of number of detections across 50 days
+                # Statistics library to calculate mean, stdev of number of
+                # detections across 50 days
+                mean_val = statistics.mean(counts_list)
                 sd_val = statistics.pstdev(counts_list)
 
-                individual_stats[name] = { # Add to dictionary based on the name of each user
+                individual_stats[name] = {  # Add to dictionary based on the name of each user
                     "mean_daily_appearances": round(mean_val, 2),
                     "std_dev": round(sd_val, 2),
                     "anomaly_threshold_2SD": math.ceil(mean_val + (2 * sd_val))
                 }
 
             # --Typical visit durations--
-	    # Typical visit durations for invidiauls is now associated with pseudonyms, no longer with a personal identifier
+	    # Typical visit durations for invidiauls is now associated with
+	    # pseudonyms, no longer with a personal identifier
             person_durations = defaultdict(list)
             for e in events:
-                personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
+                personal_name = getattr(
+    e, 'person_name', 'Unknown') or 'Unknown'
                 dur = getattr(e, 'duration_seconds', 0.0)
-				# Once we extract a personal identifier and then their duration, we translate the name to a pseudonym to be stored
-                if dur > 0:  #Ignore rows with 0.0
+				# Once we extract a personal identifier and then their duration, we
+				# translate the name to a pseudonym to be stored
+                if dur > 0:  # Ignore rows with 0.0
                     if personal_name != "Unknown":
                         clean_name = personal_name.replace("_", " ")
-			# Similar pipeline to the daily frequency, we use .get() method to check personal_name and clean_name for its matching pseudonym
-                        pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+			# Similar pipeline to the daily frequency, we use .get() method to check
+			# personal_name and clean_name for its matching pseudonym
+                        pseudonymized_name = Names_pseudonyms.get(
+                            personal_name) or Names_pseudonyms.get(clean_name, personal_name)
                     else:
                         pseudonymized_name = "Unknown"
 
@@ -814,19 +960,21 @@ def update_statistical_baselines():
                 },
                 "statistical_baselines": baselines,
                 "individual_daily_frequency": individual_stats,
-                "typical_visit_durations": duration_stats 
+                "typical_visit_durations": duration_stats
             }
 
             # Save calculations to a file in baselines.json
             with open("baselines.json", "w") as f:
                 json.dump(final_data, f, indent=4)
 
-            print("[REPORT ENGINE] Baselines successfully updated and saved to baselines.json.")
+            print(
+                "[REPORT ENGINE] Baselines successfully updated and saved to baselines.json.")
             return final_data
 
         except Exception as e:
             print(f"[ERROR] Failed to calculate baselines: {e}")
             return {"status": "error"}
+
 
 @app.route('/api/calculate_baselines')
 @login_required
@@ -836,16 +984,18 @@ def api_calculate_baselines():
     return jsonify(data)
 
 # --Occupancy prediction--
+
+
 @app.route('/api/stats/predictions')
 @login_required
 def get_predictions():
     try:
         start_date = datetime(2026, 3, 12)
-        events = DetectionEvent.query.filter(DetectionEvent.timestamp >= start_date).all()
+        events = DetectionEvent.query.filter(
+    DetectionEvent.timestamp >= start_date).all()
 
         from collections import defaultdict
 
-        
         daily_hour_data = defaultdict(lambda: {
             h: {
                 'auth_names': set(),
@@ -919,13 +1069,15 @@ def get_predictions():
 
 # --Quiet Hours--
 
+
 @app.route('/get_quiet_hours')
 @login_required
 def get_quiet_hours():
     try:
         start = config.QUIET_HOURS_START
-        end = config.QUIET_HOURS_END 
-        if os.path.exists("settings.json"): # Pull saved quiet hour values from settings.json
+        end = config.QUIET_HOURS_END
+        if os.path.exists(
+            "settings.json"):  # Pull saved quiet hour values from settings.json
             with open("settings.json", "r") as f:
                 data = json.load(f)
                 start = data.get("quiet_start", start)
@@ -933,6 +1085,7 @@ def get_quiet_hours():
         return jsonify(status="success", start=start, end=end)
     except Exception as e:
         return jsonify(status="error", message=str(e))
+
 
 @app.route('/update_quiet_hours', methods=['POST'])
 @login_required
@@ -952,28 +1105,33 @@ def update_quiet_hours():
         settings["quiet_start"] = new_start
         settings["quiet_end"] = new_end
 
-        with open("settings.json", "w") as f: # update quiet hour values
+        with open("settings.json", "w") as f:  # update quiet hour values
             json.dump(settings, f, indent=4)
 
-        log_user_action("Updated Quiet Hours", f"Set to {new_start}:00 - {new_end}:00") # <--- NEW AUDIT HOOK
+        log_user_action(
+    "Updated Quiet Hours",
+     f"Set to {new_start}:00 - {new_end}:00")  # <--- NEW AUDIT HOOK
         return jsonify(status="success", message="Quiet hours updated!")
     except Exception as e:
         return jsonify(status="error", message=str(e))
 
 # --Data Retention--
 
+
 @app.route('/get_retention')
 @login_required
 def get_retention():
     try:
         days = 90
-        if os.path.exists("settings.json"): # data retention threshold saved on settings.json
+        if os.path.exists(
+            "settings.json"):  # data retention threshold saved on settings.json
             with open("settings.json", "r") as f:
                 data = json.load(f)
                 days = data.get("log_retention_days", 90)
         return jsonify(status="success", days=days)
     except Exception as e:
         return jsonify(status="error", message=str(e))
+
 
 @app.route('/update_retention', methods=['POST'])
 @login_required
@@ -994,12 +1152,14 @@ def update_retention():
         with open("settings.json", "w") as f:
             json.dump(settings, f, indent=4)
 
-        log_user_action("Updated Retention Policy", f"Set database auto-clean to {new_days} days.")
+        log_user_action("Updated Retention Policy",
+     f"Set database auto-clean to {new_days} days.")
         return jsonify(status="success", message="Retention policy updated!")
     except Exception as e:
         return jsonify(status="error", message=str(e))
 
 # --Privacy Control Routes--
+
 
 @app.route('/get_anonymize_mode')
 @login_required
@@ -1009,7 +1169,8 @@ def get_anonymize_mode():
         if os.path.exists("settings.json"):
             with open("settings.json", "r") as f:
                 data = json.load(f)
-                enabled = data.get("anonymized_mode", False) # Defualt toggle anonymized mode off
+                # Defualt toggle anonymized mode off
+                enabled = data.get("anonymized_mode", False)
         return jsonify(status="success", enabled=enabled)
     except Exception as e:
         return jsonify(status="error", message=str(e))
@@ -1035,10 +1196,15 @@ def update_anonymize_mode():
             json.dump(settings, f, indent=4)
 
         status_text = "Enabled" if enabled else "Disabled"
-        log_user_action("Updated Privacy Settings", f"{status_text} Anonymized Mode.")
-        return jsonify(status="success", message=f"Anonymized mode {status_text.lower()}!")
+        log_user_action(
+    "Updated Privacy Settings",
+     f"{status_text} Anonymized Mode.")
+        return jsonify(
+    status="success",
+     message=f"Anonymized mode {status_text.lower()}!")
     except Exception as e:
         return jsonify(status="error", message=str(e))
+
 
 @app.route('/get_privacy_zone')
 @login_required
@@ -1046,7 +1212,8 @@ def get_privacy_zone():
     """Fetches the current privacy zone coordinates for the dashboard."""
     try:
         # Default fallback values if none exist yet
-        pz_data = {"enabled": False, "x1": 100, "y1": 50, "x2": 400, "y2": 300} # Rectangular blur zones hence 4 coordinates
+        pz_data = {"enabled": False, "x1": 100, "y1": 50, "x2": 400,
+            "y2": 300}  # Rectangular blur zones hence 4 coordinates
 
         if os.path.exists("settings.json"):
             with open("settings.json", "r") as f:
@@ -1080,15 +1247,17 @@ def update_privacy_zone():
             "y2": int(data.get("y2", 0))
         }
 
-        
         with open("settings.json", "w") as f:
             json.dump(settings, f, indent=4)
 
-        
         status_text = "Enabled" if settings["privacy_zone"]["enabled"] else "Disabled"
-        log_user_action("Updated Privacy Zone", f"{status_text} the physical camera blur mask.") # Add to Audit Log table
+        log_user_action(
+    "Updated Privacy Zone",
+     f"{status_text} the physical camera blur mask.")  # Add to Audit Log table
 
-        return jsonify(status="success", message="Privacy Zone updated successfully!")
+        return jsonify(
+    status="success",
+     message="Privacy Zone updated successfully!")
     except Exception as e:
         return jsonify(status="error", message=str(e))
 
@@ -1099,11 +1268,12 @@ def update_privacy_zone():
 @login_required
 def get_authorized_users():
     try:
-        #names = config.AUTHORIZED_NAMES
+        # names = config.AUTHORIZED_NAMES
         names = Authorized_names_ram
         return jsonify(status="success", count=len(names), names=names)
     except Exception as e:
         return jsonify(status="error", message=str(e), count=0, names=[])
+
 
 @app.route('/remove_user', methods=['POST'])
 @login_required
@@ -1113,7 +1283,8 @@ def remove_user():
         data = request.json
         name_to_remove = data.get('name')
         if not name_to_remove:
-             return jsonify({"status": "error", "message": "No name provided"}), 400
+             return jsonify(
+                 {"status": "error", "message": "No name provided"}), 400
 
         if name_to_remove in config.AUTHORIZED_NAMES:
             config.AUTHORIZED_NAMES.remove(name_to_remove)
@@ -1121,19 +1292,27 @@ def remove_user():
                 with open('config.py', 'r') as f:
                     content = f.read()
                 new_list_code = f"AUTHORIZED_NAMES = {json.dumps(config.AUTHORIZED_NAMES, indent=4)}"
-                content = re.sub(r'AUTHORIZED_NAMES\s*=\s*\[.*?\]', new_list_code, content, flags=re.DOTALL)
+                content = re.sub(
+    r'AUTHORIZED_NAMES\s*=\s*\[.*?\]',
+    new_list_code,
+    content,
+     flags=re.DOTALL)
                 with open('config.py', 'w') as f:
                     f.write(content)
 
             except Exception as file_error:
-                return jsonify({"status": "error", "message": f"Failed to save config file: {str(file_error)}"}), 500
-            return jsonify({"status": "success", "message": f"User {name_to_remove} removed."})
+                return jsonify(
+                    {"status": "error", "message": f"Failed to save config file: {str(file_error)}"}), 500
+            return jsonify({"status": "success",
+     "message": f"User {name_to_remove} removed."})
         else:
-            return jsonify({"status": "error", "message": "User not found"}), 404
+            return jsonify(
+                {"status": "error", "message": "User not found"}), 404
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # --Registering New Users Routes--
+
 
 @app.route('/register_user', methods=['POST'])
 @login_required
@@ -1142,14 +1321,17 @@ def register_user():
     try:
         name = request.form.get('name')
         if not name:
-            return jsonify({"status": "error", "message": "Name is required"}), 400
+            return jsonify(
+                {"status": "error", "message": "Name is required"}), 400
 
         if 'images' not in request.files:
-            return jsonify({"status": "error", "message": "No images uploaded"}), 400
+            return jsonify(
+                {"status": "error", "message": "No images uploaded"}), 400
 
         files = request.files.getlist('images')
         if not files or files[0].filename == '':
-            return jsonify({"status": "error", "message": "No selected file"}), 400
+            return jsonify(
+                {"status": "error", "message": "No selected file"}), 400
 
         user_folder = os.path.join(DATASET_DIR, name)
         if not os.path.exists(user_folder):
@@ -1175,7 +1357,8 @@ def register_user():
                         file_bytes = np.frombuffer(file.read(), np.uint8)
                         img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
                         if img is not None:
-                            cv2.imwrite(final_path, img, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+                            cv2.imwrite(final_path, img, [
+                                        int(cv2.IMWRITE_JPEG_QUALITY), 95])
                     except Exception as conv_e:
                         print(f"Failed to convert {filename}: {conv_e}")
                         continue
@@ -1201,12 +1384,12 @@ def register_user():
                         total_faces_processed += 1
 
         if total_faces_processed == 0:
-            return jsonify({"status": "error", "message": "No faces found in dataset! Training aborted."}), 400
+            return jsonify(
+                {"status": "error", "message": "No faces found in dataset! Training aborted."}), 400
 
         print("[INFO] Serializing and encrypting encodings...")
         data = {"encodings": knownEncodings, "names": knownNames}
 
-        
         pickled_data = pickle.dumps(data)
 
         # extract master encryption key
@@ -1218,12 +1401,13 @@ def register_user():
             final_data_to_save = fernet_padlock.encrypt(pickled_data)
             print("[INFO] Biometric data safely encrypted.")
         else:
-            
+
             final_data_to_save = pickled_data
 
         # Save only encrypted data to hard drive
         with open(ENCODINGS_FILE, "wb") as f:
-            f.write(final_data_to_save) # final data to save is in encodings.pickle encoded with Fernet
+            # final data to save is in encodings.pickle encoded with Fernet
+            f.write(final_data_to_save)
 
         if name not in config.AUTHORIZED_NAMES:
             config.AUTHORIZED_NAMES.append(name)
@@ -1231,13 +1415,20 @@ def register_user():
                 with open('config.py', 'r') as f:
                     content = f.read()
                 new_list_code = f"AUTHORIZED_NAMES = {json.dumps(config.AUTHORIZED_NAMES, indent=4)}"
-                content = re.sub(r'AUTHORIZED_NAMES\s*=\s*\[.*?\]', new_list_code, content, flags=re.DOTALL)
+                content = re.sub(
+    r'AUTHORIZED_NAMES\s*=\s*\[.*?\]',
+    new_list_code,
+    content,
+     flags=re.DOTALL)
                 with open('config.py', 'w') as f:
                     f.write(content)
             except Exception as config_error:
-                return jsonify({"status": "error", "message": f"Failed to save config: {config_error}"}), 500
+                return jsonify(
+                    {"status": "error", "message": f"Failed to save config: {config_error}"}), 500
 
-        log_user_action("Registered Identity", f"Added {name} to authorized list and retrained model.") 
+        log_user_action(
+    "Registered Identity",
+     f"Added {name} to authorized list and retrained model.")
 
         return jsonify({
             "status": "success",
@@ -1250,20 +1441,35 @@ def register_user():
 
 # --Automated email report generations--
 
-now_str =  datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 
 def generate_daily_report(target_date=None):
     """Generates the daily summary using actual SQLite database metrics."""
     with app.app_context():
         if target_date is None:
-            
+
             target_date = datetime.now().date()
 
-        print(f"\n[REPORT ENGINE] Crunching numbers for Daily Report: {target_date}...")
+        print(
+            f"\n[REPORT ENGINE] Crunching numbers for Daily Report: {target_date}...")
 
         # Establish time frame
-        start_of_day = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0)
-        end_of_day = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59)
+        start_of_day = datetime(
+    target_date.year,
+    target_date.month,
+    target_date.day,
+    0,
+    0,
+     0)
+        end_of_day = datetime(
+    target_date.year,
+    target_date.month,
+    target_date.day,
+    23,
+    59,
+     59)
 
         # Query detection events
         daily_events = DetectionEvent.query.filter(
@@ -1280,8 +1486,8 @@ def generate_daily_report(target_date=None):
             if "Authorized" in event.status:
                 if event.person_name and event.person_name != "Unknown":
                     # Avoid counting the same person multiple times
-					clean_name = event.person_name.replace('_', ' ')
-					pseudonymized_name = Names_pseudonyms.get(event.person_name) or Names_pseudonyms.get(clean_name, clean_name)
+                    clean_name = event.person_name.replace('_', ' ')
+                    pseudonymized_name = Names_pseudonyms.get(event.person_name) or Names_pseudonyms.get(clean_name, clean_name)
                     auth_names.add(pseudonymized_name)
             elif "Unauthorized" in event.status:
                 unauth_events_count += 1
@@ -1464,7 +1670,7 @@ def generate_weekly_report(target_date=None):
         for e in curr_events:
             if "Authorized" in e.status and e.person_name and e.person_name != "Unknown":
                 clean_name = e.person_name.replace('_', ' ')
-				pseudonymized_name = Names_pseudonyms.get(e.person_name) or Names_pseudonyms.get(clean_name, clean_name)
+                pseudonymized_name = Names_pseudonyms.get(e.person_name) or Names_pseudonyms.get(clean_name, clean_name)
                 name_counts[pseudonymized_name] = name_counts.get(pseudonymized_name, 0) + 1
 
         # Most commonly viewed calculations
@@ -1476,10 +1682,10 @@ def generate_weekly_report(target_date=None):
 
         # Calculate most dormant user
         all_auth_names = []
-		for n in Authorized_names_ram:
-			clean_n = n.replace("_", " ")
-			pseudo = Names_pseudonyms.get(n) or Names_pseudonyms.get(clean_n, n)
-			all_auth_names.append(pseudo)
+        for n in Authorized_names_ram:
+            clean_n = n.replace("_", " ")
+            pseudo = Names_pseudonyms.get(n) or Names_pseudonyms.get(clean_n, n)
+            all_auth_names.append(pseudo)
         if all_auth_names:
             # Map every authorized user to their count (Default to 0 if they weren't seen at all)
             auth_counts = {name: name_counts.get(name, 0) for name in all_auth_names}
@@ -1488,7 +1694,7 @@ def generate_weekly_report(target_date=None):
             # Find everyone who shares that lowest number
             dormant_users = [name for name, count in auth_counts.items() if count == min_count]
 
-            
+
             dormant_str = ", ".join(dormant_users[:3])
             if len(dormant_users) > 3:
                 dormant_str += f" (+{len(dormant_users)-3} more)"
@@ -1748,16 +1954,16 @@ def generate_monthly_report(target_date=None):
 
         # Revocation list math
         all_auth_names = []
-		for n in Authorized_names_ram:
-			clean_n = n.replace("_", " ")
-			pseudo = Names_pseudonyms.get(n) or Names_pseudonyms.get(clean_n, n)
-			all_auth_names.append(pseudo)
-		
+        for n in Authorized_names_ram:
+            clean_n = n.replace("_", " ")
+            pseudo = Names_pseudonyms.get(n) or Names_pseudonyms.get(clean_n, n)
+            all_auth_names.append(pseudo)
+
         seen_names = set()
         for e in month_events:
             if "Authorized" in e.status and e.person_name and e.person_name != "Unknown":
-				clean_name = e.person_name.replace("_", " ")
-				pseudonym_name = Names_pseudonyms.get(e.person_name) or Names_pseudonyms.get(clean_name, e.person_name)
+                clean_name = e.person_name.replace("_", " ")
+                pseudonym_name = Names_pseudonyms.get(e.person_name) or Names_pseudonyms.get(clean_name, e.person_name)
                 seen_names.add(pseudonym_name)
 
         # Find anyone in the config file who wasn't seen a single time
@@ -1995,17 +2201,17 @@ if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true": # Prevents Fl
     #scheduler.add_job(func=generate_daily_report, trigger="interval", minutes=1, id='test_email_job')
 
     # Schedule DAILY Report for 10:13 PM every day
-    scheduler.add_job(func=generate_daily_report, trigger="cron", hour=22, minute=13)
+    scheduler.add_job(func=generate_daily_report, trigger="cron", hour=19, minute=37)
 
     # Schedule WEEKLY Report for Sunday at 12:13 PM
-    scheduler.add_job(func=generate_weekly_report, trigger="cron", day_of_week='sun', hour=12, minute=13)
+    scheduler.add_job(func=generate_weekly_report, trigger="cron", day_of_week='sat', hour=19, minute=37)
 
     # Schedule MONTHLY Report for the 31st of every month at 10:51 PM
-    scheduler.add_job(func=generate_monthly_report, trigger="cron", day='31', hour=22, minute=51)
+    scheduler.add_job(func=generate_monthly_report, trigger="cron", day='7', hour=19, minute=37)
 
     # Machine learning and calculations each day
     # Runs every single night at 11:22 PM to learn from the previous day's traffic
-    scheduler.add_job(func=update_statistical_baselines, trigger="cron", hour= 17, minute=44)
+    scheduler.add_job(func=update_statistical_baselines, trigger="cron", hour= 19, minute=37)
 
     # Data retention cleanup
     # Runs every day at 1:21 PM to clean up database
