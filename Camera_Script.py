@@ -532,9 +532,9 @@ def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Num
 
 def send_individual_anomaly_alert(image_frame, person_name, current_count, threshold): # Individualized anomaly email
 	# Add pseudonym pipeline to send pseudonyms during anonymized mode
-	if is_anonymized_mode():
-		clean_name = person_name.replace('_', ' ')
-		person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
+    if is_anonymized_mode():
+        clean_name = person_name.replace('_', ' ')
+        person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
 	
     log_event(f"BEHAVIORAL ANOMALY: {person_name} ({current_count} visits) exceeds daily limit of {threshold}", priority="ALERT")
     
@@ -577,9 +577,9 @@ def send_individual_anomaly_alert(image_frame, person_name, current_count, thres
 
 def send_duration_anomaly_alert(image_frame, person_name, duration, threshold): # Individualized duration exceeds normal threshold
     # anonymized mode has us send emails in pseudonyms
-	if is_anonymized_mode():
-		clean_name = person_name.replace('_', ' ')
-		person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
+    if is_anonymized_mode():
+        clean_name = person_name.replace('_', ' ')
+        person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
 	
     log_event(f"DURATION ANOMALY: {person_name} ({duration:.1f}s) exceeded limit of {threshold}s", priority="ALERT")
     
@@ -843,12 +843,12 @@ while True:
                 if baselines_data and clean_name not in daily_anomaly_alerts_sent:
                     indiv_stats = baselines_data.get("individual_daily_frequency", {}) # Extract typical frequency for individuals from baselines.json
 
-					pseudonym_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, clean_name)
+                    pseudonym_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, clean_name)
                     
                     if pseudonym_name in indiv_stats: # Check for pseudonyms since that is the label on our baseline calculations now
                         threshold = indiv_stats[pseudonym_name].get("anomaly_threshold_2SD", 9999)
-					elif name in indiv_stats:
-						threshold = indiv_stats[name].get("anomaly_threshold_2SD", 9999
+                    elif name in indiv_stats:
+                        threshold = indiv_stats[name].get("anomaly_threshold_2SD", 9999)
                     elif clean_name in indiv_stats:
                         threshold = indiv_stats[clean_name].get("anomaly_threshold_2SD", 9999)
                     elif clean_name == "Unknown":
@@ -868,12 +868,12 @@ while True:
                 dur_stats = baselines_data.get("typical_visit_durations", {}) # Extract the baselines for typical durations
                 raw_name = active_visits[clean_name]['raw_name']
 
-				pseudonym_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, clean_name)
+                pseudonym_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, clean_name)
                 
                 if pseudonym_name in dur_stats: #Baselines are in pseudonyms now so we must check it first
                     threshold = dur_stats[pseudonym_name].get("anomaly_max_duration", 9999)
-				elif raw_name in dur_stats: 
-					threshold = dur_stats[raw_name].get("anomaly_max_duration", 9999)
+                elif raw_name in dur_stats:
+                    threshold = dur_stats[raw_name].get("anomaly_max_duration", 9999)
                 elif clean_name in dur_stats:
                     threshold = dur_stats[clean_name].get("anomaly_max_duration", 9999)
                 else:
