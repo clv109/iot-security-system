@@ -1280,11 +1280,13 @@ def generate_daily_report(target_date=None):
             if "Authorized" in event.status:
                 if event.person_name and event.person_name != "Unknown":
                     # Avoid counting the same person multiple times
-                    auth_names.add(event.person_name.replace('_', ' '))
+					clean_name = event.person_name.replace('_', ' ')
+					pseudonymized_name = Names_pseudonyms.get(event.person_name) or Names_pseudonyms.get(clean_name, clean_name)
+                    auth_names.add(pseudonymized_name)
             elif "Unauthorized" in event.status:
                 unauth_events_count += 1
 
-        # Queyr alert logs
+        # Query alert logs
         daily_alerts = AlertLog.query.filter(
             AlertLog.timestamp >= start_of_day,
             AlertLog.timestamp <= end_of_day
@@ -1462,7 +1464,8 @@ def generate_weekly_report(target_date=None):
         for e in curr_events:
             if "Authorized" in e.status and e.person_name and e.person_name != "Unknown":
                 clean_name = e.person_name.replace('_', ' ')
-                name_counts[clean_name] = name_counts.get(clean_name, 0) + 1
+				pseudonymized_name = Names_pseudonyms.get(e.person_name) or Names_pseudonyms.get(clean_name, clean_name)
+                name_counts[pseudonymized_name] = name_counts.get(pseudonymized_name, 0) + 1
 
         # Most commonly viewed calculations
         if name_counts:
@@ -1471,8 +1474,12 @@ def generate_weekly_report(target_date=None):
         else:
             most_viewed = "None detected"
 
-        # Calculate most dormat user
-        all_auth_names = [n.replace('_', ' ') for n in config.AUTHORIZED_NAMES]
+        # Calculate most dormant user
+        all_auth_names = []
+		for n in Authorized_names_ram:
+			clean_n = n.replace("_", " ")
+			pseudo = Names_pseudonyms.get(n) or Names_pseudonyms.get(clean_n, n)
+			all_auth_names.append(pseudo)
         if all_auth_names:
             # Map every authorized user to their count (Default to 0 if they weren't seen at all)
             auth_counts = {name: name_counts.get(name, 0) for name in all_auth_names}
@@ -1740,17 +1747,24 @@ def generate_monthly_report(target_date=None):
             busiest_week_str = "No recorded traffic"
 
         # Revocation list math
-        all_auth_names = [n.replace('_', ' ') for n in config.AUTHORIZED_NAMES]
+        all_auth_names = []
+		for n in Authorized_names_ram:
+			clean_n = n.replace("_", " ")
+			pseudo = Names_pseudonyms.get(n) or Names_pseudonyms.get(clean_n, n)
+			all_auth_names.append(pseudo)
+		
         seen_names = set()
         for e in month_events:
             if "Authorized" in e.status and e.person_name and e.person_name != "Unknown":
-                seen_names.add(e.person_name.replace('_', ' '))
+				clean_name = e.person_name.replace("_", " ")
+				pseudonym_name = Names_pseudonyms.get(e.person_name) or Names_pseudonyms.get(clean_name, e.person_name)
+                seen_names.add(pseudonym_name)
 
         # Find anyone in the config file who wasn't seen a single time
         dormant_users = [name for name in all_auth_names if name not in seen_names]
         revocation_str = ", ".join(dormant_users) if dormant_users else "None. All users active."
 
-        # Infrastucture and uptime math
+        # Infrastructure and uptime math
         catch_ups = sum(1 for r in month_reports if r.timestamp.date() > r.coverage_date)
         if catch_ups == 0:
             health_status = f"100% Scheduled Uptime (0 offline recoveries needed)"
