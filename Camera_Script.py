@@ -635,17 +635,17 @@ def draw_results(frame, locations, names):
             is_authorized = True
             name = name.replace('_', ' ') 
 
-		if is_anonymized_mode(): 
-			cleaned_name = name.replace('_', ' ')
-			pseudonym = Names_pseudonyms.get(name) or Names_pseudonyms.get(cleaned_name, "Unknown")
+        if is_anonymized_mode(): 
+            cleaned_name = name.replace('_', ' ')
+            pseudonym = Names_pseudonyms.get(name) or Names_pseudonyms.get(cleaned_name, "Unknown")
 
-			# Cut the pseudonym string down to the first 8 characters to prevent 64 characters from run off 
-		    if pseudonym != "Unknown":
+	    # Cut the pseudonym string down to the first 8 characters to prevent 64 characters from run off 
+            if pseudonym != "Unknown":
                 name = pseudonym[:8]
-            else: 
+            else:
                 name = "Unknown"
-			
-        
+
+
         if is_authorized:
             color = (0, 255, 0) # Green
         else:

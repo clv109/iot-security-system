@@ -2211,7 +2211,7 @@ if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true": # Prevents Fl
 
     # Machine learning and calculations each day
     # Runs every single night at 11:22 PM to learn from the previous day's traffic
-    scheduler.add_job(func=update_statistical_baselines, trigger="cron", hour= 19, minute=37)
+    scheduler.add_job(func=update_statistical_baselines, trigger="cron", hour= 22, minute=27)
 
     # Data retention cleanup
     # Runs every day at 1:21 PM to clean up database
