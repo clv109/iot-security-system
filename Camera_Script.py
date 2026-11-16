@@ -442,7 +442,7 @@ def send_email_alert(image_frame, duration): # Unauthorized person and quiet hou
         msg = MIMEMultipart()
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        if is_quiet_hours():
+        if is_quiet_hours() and is_anonymized_mode():
             subj = f"URGENT: QUIET HOURS BREACH - {now_str}"
             body = (
                 f"SECURITY WARNING: QUIET HOURS VIOLATION\n"
@@ -455,7 +455,36 @@ def send_email_alert(image_frame, duration): # Unauthorized person and quiet hou
                 f"Alert Cooldown: {ALERT_COOLDOWN} seconds\n"
                 f"=======================================\n\n"
                 f"An unauthorized person was detected during restricted hours.\n"
-                f"Please review the attached image immediately."
+                f"Anonymized mode is ON; thus, the latest capture is not attached for review to respect personal privacy."
+            )
+        elif is_quiet_hours() and not is_anonymized_mode():
+            subj = f"URGENT: QUIET HOURS BREACH - {now_str}"
+            body = (
+                f"SECURITY WARNING: QUIET HOURS VIOLATION\n"
+                f"=======================================\n"
+                f"Time of Incident: {now_str}\n"
+                f"Duration in View: {duration:.1f} seconds\n"
+                f"Quiet Hours Schedule: {q_start}:00 - {q_end}:00\n"
+                f"\n--- System Settings ---\n"
+                f"Trigger Threshold: {UNAUTH_THRESHOLD} seconds\n"
+                f"Alert Cooldown: {ALERT_COOLDOWN} seconds\n"
+                f"=======================================\n\n"
+                f"An unauthorized person was detected during restricted hours.\n"
+                f"Please review the attached image immediately"
+            )
+        elif not is_quiet_hours() and not is_anonymized_mode():
+            subj = f"Security Alert: Unauthorized Person - {now_str}"
+            body = (
+                f"SECURITY ALERT: UNAUTHORIZED ACTIVITY\n"
+                f"---------------------------------------\n"
+                f"Time: {now_str}\n"
+                f"Duration in View: {duration:.1f} seconds\n"
+                f"\n--- System Settings ---\n"
+                f"Trigger Threshold: {UNAUTH_THRESHOLD} seconds\n"
+                f"Alert Cooldown: {ALERT_COOLDOWN} seconds\n"
+                f"---------------------------------------\n\n"
+                f"An unknown individual has been detected by the security system.\n"
+                f"See the attached capture for details."
             )
         else:
             subj = f"Security Alert: Unauthorized Person - {now_str}"
@@ -469,7 +498,7 @@ def send_email_alert(image_frame, duration): # Unauthorized person and quiet hou
                 f"Alert Cooldown: {ALERT_COOLDOWN} seconds\n"
                 f"---------------------------------------\n\n"
                 f"An unknown individual has been detected by the security system.\n"
-                f"See the attached capture for details."
+                f"Anonymized mode is ON; thus, the latest capture is not attached for review to respect personal privacy."
             )
 
         msg['Subject'] = subj
@@ -502,20 +531,35 @@ def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Num
         msg['Subject'] = f"AI Anomaly Detected: Unusual Traffic Spike ({hour_label})"
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
-        
-        body = (
-            f"STATISTICAL ANOMALY ALERT: UNUSUAL TRAFFIC SPIKE\n"
-            f"=============================================\n"
-            f"Time of Detection: {now_str}\n"
-            f"Current Hour: {hour_label}\n"
-            f"\n--- Statistical Baseline Data ---\n"
-            f"Events Detected This Hour: {current_count}\n"
-            f"Anomaly Threshold (Mean + 2 StdDev): {threshold}\n"
-            f"=============================================\n\n"
-            f"The baseline engine has flagged the current traffic volume as a statistical anomaly "
-            f"based on your historical household patterns. This indicates unusually high activity.\n\n"
-            f"Latest capture attached for review."
-        )
+
+		if not is_anonymized_mode():
+            body = (
+                f"STATISTICAL ANOMALY ALERT: UNUSUAL TRAFFIC SPIKE\n"
+                f"=============================================\n"
+                f"Time of Detection: {now_str}\n"
+                f"Current Hour: {hour_label}\n"
+                f"\n--- Statistical Baseline Data ---\n"
+                f"Events Detected This Hour: {current_count}\n"
+                f"Anomaly Threshold (Mean + 2 StdDev): {threshold}\n"
+                f"=============================================\n\n"
+                f"The baseline engine has flagged the current traffic volume as a statistical anomaly "
+                f"based on your historical household patterns. This indicates unusually high activity.\n\n"
+                f"Latest capture attached for review."
+            )
+        else: 
+            body = (
+                f"STATISTICAL ANOMALY ALERT: UNUSUAL TRAFFIC SPIKE\n"
+                f"=============================================\n"
+                f"Time of Detection: {now_str}\n"
+                f"Current Hour: {hour_label}\n"
+                f"\n--- Statistical Baseline Data ---\n"
+                f"Events Detected This Hour: {current_count}\n"
+                f"Anomaly Threshold (Mean + 2 StdDev): {threshold}\n"
+                f"=============================================\n\n"
+                f"The baseline engine has flagged the current traffic volume as a statistical anomaly "
+                f"based on your historical household patterns. This indicates unusually high activity.\n\n"
+                f"Anonymized mode is ON; thus, the latest capture is not attached for review to respect personal privacy."
+            )
 
         msg.attach(MIMEText(body))
         if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
@@ -548,21 +592,36 @@ def send_individual_anomaly_alert(image_frame, person_name, current_count, thres
         msg['Subject'] = f"Detection Frequency Alert: Unusual Activity for {person_name}"
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
-        
-        body = (
-            f"INDIVIDUAL FREQUENCY ALERT: BEHAVIORAL ANOMALY\n"
-            f"=============================================\n"
-            f"Time of Detection: {now_str}\n"
-            f"Individual Flagged: {person_name}\n"
-            f"\n--- Statistical Baseline Data ---\n"
-            f"Total Detections Today: {current_count}\n"
-            f"Daily Threshold (Mean + 2 StdDev): {threshold}\n"
-            f"=============================================\n\n"
-            f"{person_name} has been flagged for unusually high frequency today based on "
-            f"their historical baseline.\n\n"
-            f"Latest capture attached for review."
-        )
 
+        if not is_anonymized_mode():
+            body = (
+                f"INDIVIDUAL FREQUENCY ALERT: BEHAVIORAL ANOMALY\n"
+                f"=============================================\n"
+                f"Time of Detection: {now_str}\n"
+                f"Individual Flagged: {person_name}\n"
+                f"\n--- Statistical Baseline Data ---\n"
+                f"Total Detections Today: {current_count}\n"
+                f"Daily Threshold (Mean + 2 StdDev): {threshold}\n"
+                f"=============================================\n\n"
+                f"{person_name} has been flagged for unusually high frequency today based on "
+                f"their historical baseline.\n\n"
+                f"Latest capture attached for review."
+            )
+        else: 
+            body = (
+                f"INDIVIDUAL FREQUENCY ALERT: BEHAVIORAL ANOMALY\n"
+                f"=============================================\n"
+                f"Time of Detection: {now_str}\n"
+                f"Individual Flagged: {person_name}\n"
+                f"\n--- Statistical Baseline Data ---\n"
+                f"Total Detections Today: {current_count}\n"
+                f"Daily Threshold (Mean + 2 StdDev): {threshold}\n"
+                f"=============================================\n\n"
+                f"{person_name} has been flagged for unusually high frequency today based on "
+                f"their historical baseline.\n\n"
+                f"Anonymized mode is ON; thus, the latest capture is not attached for review to respect personal privacy."
+            )
+        
         msg.attach(MIMEText(body))
         if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
             msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
@@ -595,19 +654,34 @@ def send_duration_anomaly_alert(image_frame, person_name, duration, threshold): 
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
         
-        body = (
-            f"VISIT DURATION ALERT: BEHAVIORAL ANOMALY\n"
-            f"=============================================\n"
-            f"Time of Detection: {now_str}\n"
-            f"Individual Flagged: {person_name}\n"
-            f"\n--- Statistical Baseline Data ---\n"
-            f"Current Visit Duration: {duration:.1f} seconds\n"
-            f"Maximum Normal Threshold: {threshold:.1f} seconds\n"
-            f"=============================================\n\n"
-            f"{person_name} has been present in front of the camera for an unusually long period "
-            f"compared to their historical visits. Recommended to look into {person_name}'s activity.\n\n"
-            f"Latest capture attached for review."
-        )
+        if not is_anonymized_mode():
+            body = (
+                f"VISIT DURATION ALERT: BEHAVIORAL ANOMALY\n"
+                f"=============================================\n"
+                f"Time of Detection: {now_str}\n"
+                f"Individual Flagged: {person_name}\n"
+                f"\n--- Statistical Baseline Data ---\n"
+                f"Current Visit Duration: {duration:.1f} seconds\n"
+                f"Maximum Normal Threshold: {threshold:.1f} seconds\n"
+                f"=============================================\n\n"
+                f"{person_name} has been present in front of the camera for an unusually long period "
+                f"compared to their historical visits. Recommended to look into {person_name}'s activity.\n\n"
+                f"Latest capture attached for review."
+            )
+        else: 
+            body = (
+                f"VISIT DURATION ALERT: BEHAVIORAL ANOMALY\n"
+                f"=============================================\n"
+                f"Time of Detection: {now_str}\n"
+                f"Individual Flagged: {person_name}\n"
+                f"\n--- Statistical Baseline Data ---\n"
+                f"Current Visit Duration: {duration:.1f} seconds\n"
+                f"Maximum Normal Threshold: {threshold:.1f} seconds\n"
+                f"=============================================\n\n"
+                f"{person_name} has been present in front of the camera for an unusually long period "
+                f"compared to their historical visits. Recommended to look into {person_name}'s activity.\n\n"
+                f"Anonymized mode is ON; thus, the latest capture is not attached for review to respect personal privacy."
+            )
 
         msg.attach(MIMEText(body))
         if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
