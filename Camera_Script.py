@@ -505,7 +505,7 @@ def send_email_alert(image_frame, duration): # Unauthorized person and quiet hou
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
         msg.attach(MIMEText(body))
-		if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
+        if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
             msg.attach(MIMEImage(encoded.tobytes(), name="security_capture.jpg")) # Send jpg image of instance in the email
 
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
@@ -532,7 +532,7 @@ def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Num
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
 
-		if not is_anonymized_mode():
+        if not is_anonymized_mode():
             body = (
                 f"STATISTICAL ANOMALY ALERT: UNUSUAL TRAFFIC SPIKE\n"
                 f"=============================================\n"
