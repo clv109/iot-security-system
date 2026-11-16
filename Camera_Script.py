@@ -476,7 +476,8 @@ def send_email_alert(image_frame, duration): # Unauthorized person and quiet hou
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
         msg.attach(MIMEText(body))
-        msg.attach(MIMEImage(encoded.tobytes(), name="security_capture.jpg")) # Send jpg image of instance in the email
+		if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
+            msg.attach(MIMEImage(encoded.tobytes(), name="security_capture.jpg")) # Send jpg image of instance in the email
 
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
             s.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -517,7 +518,8 @@ def send_anomaly_alert(image_frame, current_count, threshold, hour_label): # Num
         )
 
         msg.attach(MIMEText(body))
-        msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
+        if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
+            msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
 
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
             s.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -562,7 +564,8 @@ def send_individual_anomaly_alert(image_frame, person_name, current_count, thres
         )
 
         msg.attach(MIMEText(body))
-        msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
+        if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
+            msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
 
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
             s.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -607,7 +610,8 @@ def send_duration_anomaly_alert(image_frame, person_name, duration, threshold): 
         )
 
         msg.attach(MIMEText(body))
-        msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
+        if not is_anonymized_mode(): # During anonymized mode ON, we DO NOT send an image of the current state to protect personal identity
+            msg.attach(MIMEImage(encoded.tobytes(), name="anomaly_capture.jpg"))
 
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
             s.login(SENDER_EMAIL, SENDER_PASSWORD)
