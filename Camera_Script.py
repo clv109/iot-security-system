@@ -896,8 +896,9 @@ while True:
                 
                 db_name = clean_name # Log the cleaner version of a name without space when Anonymized mode is off
 
-                if is_auth and is_anonymized_mode():
-                    db_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, "Unknown") 
+                # if is_auth and is_anonymized_mode():
+                # We ONLY store pseudonyms in the SQLite database now
+                db_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, "Unknown") 
                     # Use get method for dictionary instead of Names_pseudonyms[name] to ensure no KeyError is every returned, thus crashing program
                 
                 db_id = log_event_to_db(status, person_name=db_name) 
