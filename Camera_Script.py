@@ -910,8 +910,13 @@ while True:
                     'alert_sent': False,
                     'raw_name': name
                 }
+
+                if is_anonymized_mode():
+                    anonymous_name = db_name #pseudonymized for the live event log
+                else: 
+                    anonymous_name = clean_name # normal personal identifier for the live event log
                 
-                log_event(f"Detected: {db_name} [{status.upper()}]")
+                log_event(f"Detected: {anonymous_name} [{status.upper()}]") # Switch to clean_name to be logged since db_name is always pseudonyms, anonymized mode is a display setting
                 hourly_event_count += 1 
                 
                 if baselines_data and not anomaly_alert_sent_this_hour: # Anomaly checks
