@@ -855,15 +855,13 @@ def update_statistical_baselines():
             # --Daily frequency for individuals--
 	    # Daily frequency for invidiauls is now associated with pseudonyms, no
 	    # longer with a personal identifier
-            person_daily_counts = defaultdict(
-    lambda: defaultdict(int))  # person -> date -> count
+            person_daily_counts = defaultdict(lambda: defaultdict(int))  # person -> date -> count
             for e in events:
                 # Pulls from timestamp column and only takes date (not time)
                 date_str = e.timestamp.strftime("%Y-%m-%d")
                 # Uses get_attr method to extract the person's name from the
                 # person_name column
-                personal_name = getattr(
-    e, 'person_name', 'Unknown') or 'Unknown'
+                personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
 		# Once a person's name is extracted from the SQLite database, we must map
 		# it to its pseudonym to be stored
 
@@ -872,9 +870,8 @@ def update_statistical_baselines():
 				# If it's a plaintext name, this grabs the pseudonym string
 				# If the name is already a pseudonym (i.e. anonymized mode was on) then
 				# .get() fails and it defaults to the personal_name that was already the
-				# pseudonym
-                    pseudonymized_name = Names_pseudonyms.get(
-                        personal_name) or Names_pseudonyms.get(clean_name, personal_name)
+				# pseudonym; this is the condition that always occurs now since the SQLite database only contains pseudonyms
+                    pseudonymized_name = Names_pseudonyms.get(personal_name) or Names_pseudonyms.get(clean_name, personal_name)
                 else:
                     pseudonymized_name = "Unknown"
 
@@ -887,8 +884,7 @@ def update_statistical_baselines():
             individual_stats = {}
             total_days_in_window = 50
 
-            for name, date_counts in person_daily_counts.items(
-            ):  # Iterates for however many people are in person_daily_counts
+            for name, date_counts in person_daily_counts.items():  # Iterates for however many people are in person_daily_counts
                 # Counts how many total dates of detection there are inside the
                 # inner date_counts dictionary for a specific person
                 days_seen = len(date_counts)
@@ -921,8 +917,7 @@ def update_statistical_baselines():
 	    # pseudonyms, no longer with a personal identifier
             person_durations = defaultdict(list)
             for e in events:
-                personal_name = getattr(
-    e, 'person_name', 'Unknown') or 'Unknown'
+                personal_name = getattr(e, 'person_name', 'Unknown') or 'Unknown'
                 dur = getattr(e, 'duration_seconds', 0.0)
 				# Once we extract a personal identifier and then their duration, we
 				# translate the name to a pseudonym to be stored
