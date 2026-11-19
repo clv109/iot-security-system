@@ -886,14 +886,16 @@ while True:
                 unauth_found = True
 
         for name in names_found: # Checking for user authorization
-            clean_name = name.replace('_', ' ')
+            clean_name = name.replace('_', ' ') 
             is_auth = (name in Authorized_names_ram or clean_name in Authorized_names_ram)
             if not is_auth:
                 clean_name = "Unknown"
                 
             if clean_name not in active_visits:
                 status = "Authorized" if is_auth else "Unauthorized"
-                
+
+
+				# IMPORTANT NOTE: clean_name still is and will always remain as the holder for the personal identifier
                 db_name = clean_name # Log the cleaner version of a name without space when Anonymized mode is off
 
                 # if is_auth and is_anonymized_mode():
@@ -901,7 +903,7 @@ while True:
                 db_name = Names_pseudonyms.get(name) or Names_pseudonyms.get(clean_name, "Unknown") 
                     # Use get method for dictionary instead of Names_pseudonyms[name] to ensure no KeyError is every returned, thus crashing program
                 
-                db_id = log_event_to_db(status, person_name=db_name) 
+                db_id = log_event_to_db(status, person_name=db_name) # Logging to database in now pseudonyms
                 
                 active_visits[clean_name] = { 
                     'start': now_time,
@@ -952,7 +954,7 @@ while True:
                         threshold = getattr(config, 'NEW_USER_GRACE_THRESHOLD', 5)
                         
                     if daily_user_counts[clean_name] > threshold: #if user counts exceed their stdev threshold, then we send a personalized anomaly alert
-                        send_individual_anomaly_alert(frame, clean_name, daily_user_counts[clean_name], threshold)
+                        send_individual_anomaly_alert(frame, clean_name, daily_user_counts[clean_name], threshold) # Clean name, which is still a personal identifier, is what is sent in the emails
                         daily_anomaly_alerts_sent.add(clean_name)
             else:
                 active_visits[clean_name]['last_seen'] = now_time
