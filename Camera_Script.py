@@ -580,7 +580,11 @@ def send_individual_anomaly_alert(image_frame, person_name, current_count, thres
 	# Add pseudonym pipeline to send pseudonyms during anonymized mode
     if is_anonymized_mode():
         clean_name = person_name.replace('_', ' ')
-        person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
+        person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, "Unknown") #Default to "Unknown" value to preserve system security and print console error to prevent silent continue
+		# Cannot default to person_name if mapping fails since this results in a personal identifier being leaked
+
+    if person_name == "Unknown": # Console error to notify administrator
+        print("[ERROR] Failure of pseudonym mapping lookup, default to Unknown label")
 	
     log_event(f"BEHAVIORAL ANOMALY: {person_name} ({current_count} visits) exceeds daily limit of {threshold}", priority="ALERT")
     
@@ -641,7 +645,10 @@ def send_duration_anomaly_alert(image_frame, person_name, duration, threshold): 
     # anonymized mode has us send emails in pseudonyms
     if is_anonymized_mode():
         clean_name = person_name.replace('_', ' ')
-        person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, person_name)
+        person_name = Names_pseudonyms.get(person_name) or Names_pseudonyms.get(clean_name, "Unknown")
+    
+    if person_name == "Unknown": # Console error to notify administrator
+        print("[ERROR] Failure of pseudonym mapping lookup, default to Unknown label")
 	
     log_event(f"DURATION ANOMALY: {person_name} ({duration:.1f}s) exceeded limit of {threshold}s", priority="ALERT")
     
